@@ -327,16 +327,23 @@ WinMain(HINSTANCE appInstance,
 
 			V2 xAxis = {1.0f, 0.0f};
 			V2 yAxis = {0.0f, 1.0f};
-			V2 origin = {100.0f, 100.0f};
+			V2 origin = {50.0f, 100.0f};
 			f32 axisScale = 100.0f;
-			V2 basisRectangle = {5.0f, 5.0f};
-			V2 xyMax = ((xAxis + yAxis) * axisScale) + basisRectangle + origin;
+			V2 basisPoint = {5.0f, 5.0f};
 
-			PushDrawRectangle(&renderer.renderCommands, origin, xyMax, MakeV4(0.8f, 0.0f, 0.8f, 1.0f));
-			PushBasis2d(&renderer.renderCommands, xAxis, yAxis, origin, basisRectangle, axisScale, MakeV4(0.0f, 0.0f, 1.0f, 1.0f));
+			PushBasis2d(&renderer.renderCommands, xAxis, yAxis, origin, basisPoint, axisScale, MakeV4(0.4f, 0.1f, 0.8f, 1.0f));
 
-			PushDrawRectangle(&renderer.renderCommands, origin + MakeV2(20.0f, 20.0f), xyMax + MakeV2(20.0f, 20.0f), MakeV4(0.8f, 0.5f, 0.8f, 1.0f));
-			PushBasis2d(&renderer.renderCommands, xAxis, yAxis, origin + MakeV2(20.0f, 20.0f), basisRectangle, axisScale, MakeV4(0.0f, 0.0f, 1.0f, 1.0f));
+			V2 offset = {10.0f, 15.0f};
+			axisScale *= 2.0f;
+			origin += offset;
+
+			PushBasis2d(&renderer.renderCommands, xAxis, yAxis, origin, basisPoint, axisScale, MakeV4(0.8f, 0.5f, 0.8f, 1.0f));
+
+			axisScale *= 2.0f;
+			offset *= 2.0f;
+			origin += offset;
+
+			PushBasis2d(&renderer.renderCommands, xAxis, yAxis, origin, basisPoint, axisScale, MakeV4(0.2f, 0.5f, 0.9f, 1.0f));
 		}
 
 		PushEndDraw(&application.renderer->activeTexture, &renderer.renderCommands, &application.window);

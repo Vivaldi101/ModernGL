@@ -26,11 +26,11 @@ name(Bitmap *outputTarget, const void *renderBuffer)
 struct DrawBasis2dCmd
 {
 	u32 id;
-	V4 color; // TODO: Just for testing.
+	V4 color;
 	V2 origin;
 	V2 xAxis;
 	V2 yAxis;
-	V2 basisRectangle;
+	V2 basisPoint;
 	f32 axisScale;
 };
 
@@ -280,7 +280,7 @@ DrawRectangleToOutputTarget(Bitmap *outputTarget, V2 min, V2 max, V4 color)
         roundedMaxY = outputTarget->height;
     }
     
-    u32 pitch = outputTarget->pitch;
+	u32 pitch = outputTarget->pitch;
     byte *row = (byte *)outputTarget->memory + (roundedMinY*pitch) + (roundedMinX*BYTES_PER_PIXEL);
     
     for(s32 y = roundedMinY; y < roundedMaxY; y++)
@@ -317,21 +317,25 @@ RenderCommand(DrawBasis2d)
 	V2 origin = cmd->origin;
 	V2 xAxis = (cmd->xAxis * cmd->axisScale) + origin;
 	V2 yAxis = (cmd->yAxis * cmd->axisScale) + origin;
+	V2 basisPoint = cmd->basisPoint;
+	V4 basisColor = {1.0f, 0.0f, 1.0f, 1.0f};
 	V2 xyMax = ((cmd->xAxis + cmd->yAxis) * cmd->axisScale) + origin;
-	V2 basisRectangle = cmd->basisRectangle;	// TODO: just for debugging.
-	V4 basisColor = {1.0f, 1.0f, 0.0f, 1.0f};	// TODO: just for debugging.
 
-	// Origin.
-	DrawRectangleToOutputTarget(outputTarget, origin, origin + basisRectangle, basisColor);
+	DrawRectangleToOutputTarget(outputTarget, origin, xyMax, cmd->color);
 
-	// Max x
-	DrawRectangleToOutputTarget(outputTarget, xAxis, xAxis + basisRectangle, basisColor);
+	// Origin point.
+	DrawRectangleToOutputTarget(outputTarget, origin, origin + basisPoint, basisColor);
 
-	// Max y
-	DrawRectangleToOutputTarget(outputTarget, yAxis, yAxis + basisRectangle, basisColor);
+	// Max x point.
+	xAxis.x -= basisPoint.x;
+	DrawRectangleToOutputTarget(outputTarget, xAxis, xAxis + basisPoint, basisColor);
 
-	// Max x & y
-	DrawRectangleToOutputTarget(outputTarget, xyMax, xyMax + basisRectangle, basisColor);
+	// Max y point.
+	yAxis.y -= basisPoint.y;
+	DrawRectangleToOutputTarget(outputTarget, yAxis, yAxis + basisPoint, basisColor);
+
+	// Max x & y point.
+	DrawRectangleToOutputTarget(outputTarget, xyMax - basisPoint, xyMax, basisColor);
 
     return Cast(const void *, cmd + 1);
 }
@@ -379,7 +383,7 @@ PushEndDraw(Bitmap* activeTexture, PushBuffer *renderCommands, AppWindow* window
 }
 
 function void
-PushBasis2d(PushBuffer *renderCommands, V2 xAxis, V2 yAxis, V2 origin, V2 basisRectangle, f32 axisScale, V4 color)
+PushBasis2d(PushBuffer *renderCommands, V2 xAxis, V2 yAxis, V2 origin, V2 basisPoint, f32 axisScale, V4 color)
 {
     DrawBasis2dCmd *cmd = PushRenderCommandType(renderCommands, DrawBasis2dCmd);
 
@@ -389,7 +393,7 @@ PushBasis2d(PushBuffer *renderCommands, V2 xAxis, V2 yAxis, V2 origin, V2 basisR
 	cmd->xAxis = xAxis;
 	cmd->yAxis = yAxis;
 	cmd->axisScale = axisScale;
-	cmd->basisRectangle = basisRectangle;
+	cmd->basisPoint = basisPoint;
 }
 
 function void
@@ -460,7 +464,7 @@ ExecuteRenderBuffer(Bitmap *outputTarget, const void *data)
             default:
             {
                 InvalidCodePath("Invalid render command");
-            }
+            } break;
         }
     }
 }

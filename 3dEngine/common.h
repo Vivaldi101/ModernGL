@@ -93,6 +93,7 @@ do { \
 #define EventOverflow 
 #endif
 
+#define OffsetOf(s, m) (size_t)&reinterpret_cast<const volatile char&>((((s *)0)->m))
 #define Defer(begin, end) int (_i_); for((_i_) = (begin, 0); !(_i_); ++(_i_), end)
 #define Ensure(begin, end) int (_i_); assert(begin); for((_i_) = ((begin), 0); !(_i_); ++(_i_), assert(end))
 #define IsZero(x) (!(x))
