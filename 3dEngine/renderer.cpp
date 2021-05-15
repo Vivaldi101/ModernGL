@@ -10,12 +10,11 @@ enum
 };
 
 #ifdef _DEBUG
-//#define GetRenderCommandData(cmd) (cmd *)data; size_t bytesEqual = 0; {void* allocP = _alloca(sizeof(cmd)); ZeroMemory(allocP, sizeof(cmd)); bytesEqual = (RtlCompareMemory(data, allocP, sizeof(cmd)) == sizeof(cmd)); }
-#define GetRenderCommandData(cmd) (cmd *)renderBuffer;
+#define GetRenderCommandData(cmd) (cmd *)((byte*)(renderBuffer) + sizeof(((Draw*)renderBuffer)->id));
 #else
 #define GetRenderCommandData(cmd) (cmd *)renderBuffer;
 #endif
-#define PushRenderCommandType(buffer, type) (type *)(PushRenderCommandType_)((buffer), sizeof(type)) 
+#define PushRenderCommandType(buffer, type) (Draw *)(PushRenderCommandType_)((buffer), sizeof(type) + sizeof(Draw))
 
 // TODO: Pass transforms.
 // TODO: Change data to memory.
@@ -23,42 +22,45 @@ enum
 function const void * \
 name(Bitmap *outputTarget, const void *renderBuffer)
 
-struct DrawBasis2dCmd
+struct Draw
 {
 	u32 id;
-	V4 color;
-	V2 origin;
-	V2 xAxis;
-	V2 yAxis;
-	V2 basisPoint;
-	f32 axisScale;
-};
+	union Commands
+	{
+		struct DrawBasis2dCmd
+		{
+			V4 color;
+			V2 origin;
+			V2 xAxis;
+			V2 yAxis;
+			V2 basisPoint;
+			f32 axisScale;
+		};
 
-struct DrawRectangleCmd
-{
-    u32 id;
-	V2 min;
-	V2 max;
-    V4 color;
-};
+		struct DrawRectangleCmd
+		{
+			V2 min;
+			V2 max;
+			V4 color;
+		};
 
-struct DrawBitmapCmd
-{
-    u32 id;
-    Bitmap *bitmap;
-    f32 originX;
-    f32 originY;
-    f32 alignX;
-    f32 alignY;
-};
+		struct DrawBitmapCmd
+		{
+			Bitmap *bitmap;
+			f32 originX;
+			f32 originY;
+			f32 alignX;
+			f32 alignY;
+		};
 
-struct SwapBuffersCmd
-{
-    u32 id;
-	Rectangle2 drawRegion;
-	void* textureMemory;
-	HWND windowHandle;
-    //BITMAPINFO *bmpInfo; // TODO: For software rendering
+		struct SwapBuffersCmd
+		{
+			Rectangle2 drawRegion;
+			void* textureMemory;
+			HWND windowHandle;
+			//BITMAPINFO *bmpInfo; // TODO: For software rendering
+		};
+	};
 };
 
 function void
@@ -312,7 +314,7 @@ PushRenderCommandType_(PushBuffer *renderCommands, u32 byteCount)
 
 RenderCommand(DrawBasis2d)
 {
-    DrawBasis2dCmd *cmd = GetRenderCommandData(DrawBasis2dCmd);
+    Draw::Commands::DrawBasis2dCmd *cmd = GetRenderCommandData(Draw::Commands::DrawBasis2dCmd);
 
 	V2 origin = cmd->origin;
 	V2 xAxis = (cmd->xAxis * cmd->axisScale) + origin;
@@ -342,7 +344,7 @@ RenderCommand(DrawBasis2d)
 
 RenderCommand(DrawRectangle)
 {
-    DrawRectangleCmd *cmd = GetRenderCommandData(DrawRectangleCmd);
+    Draw::Commands::DrawRectangleCmd *cmd = GetRenderCommandData(Draw::Commands::DrawRectangleCmd);
     DrawRectangleToOutputTarget(outputTarget, cmd->min, cmd->max, cmd->color);
     
     return Cast(const void *, cmd + 1);
@@ -350,7 +352,7 @@ RenderCommand(DrawRectangle)
 
 RenderCommand(DrawBitmap)
 {
-    DrawBitmapCmd *cmd = GetRenderCommandData(DrawBitmapCmd);
+    Draw::Commands::DrawBitmapCmd *cmd = GetRenderCommandData(Draw::Commands::DrawBitmapCmd);
     DrawBitmapToOutputTarget(outputTarget, cmd->bitmap, cmd->originX, cmd->originY, cmd->alignX, cmd->alignY);
     
     return Cast(const void *, cmd + 1);
@@ -358,7 +360,7 @@ RenderCommand(DrawBitmap)
 
 RenderCommand(SwapBuffers)
 {
-    SwapBuffersCmd *cmd = GetRenderCommandData(SwapBuffersCmd);
+    Draw::Commands::SwapBuffersCmd *cmd = GetRenderCommandData(Draw::Commands::SwapBuffersCmd);
 
 	DrawTextureToRegion(cmd->textureMemory, cmd->drawRegion);
 
@@ -374,9 +376,11 @@ RenderCommand(SwapBuffers)
 function void
 PushEndDraw(Bitmap* activeTexture, PushBuffer *renderCommands, AppWindow* window)
 {
-    SwapBuffersCmd *cmd = PushRenderCommandType(renderCommands, SwapBuffersCmd);
+	Draw *drawCmd = PushRenderCommandType(renderCommands, Draw::Commands::SwapBuffersCmd);
+	drawCmd->id = RCMD_SWAP_BUFFERS;
 
-    cmd->id = RCMD_SWAP_BUFFERS;
+	Draw::Commands::SwapBuffersCmd *cmd = (Draw::Commands::SwapBuffersCmd*)((byte*)drawCmd + sizeof(drawCmd->id));
+
 	cmd->drawRegion = window->region;
 	cmd->windowHandle = window->handle;
 	cmd->textureMemory = activeTexture->memory;
@@ -385,9 +389,11 @@ PushEndDraw(Bitmap* activeTexture, PushBuffer *renderCommands, AppWindow* window
 function void
 PushBasis2d(PushBuffer *renderCommands, V2 xAxis, V2 yAxis, V2 origin, V2 basisPoint, f32 axisScale, V4 color)
 {
-    DrawBasis2dCmd *cmd = PushRenderCommandType(renderCommands, DrawBasis2dCmd);
+	Draw *drawCmd = PushRenderCommandType(renderCommands, Draw::Commands::DrawBasis2dCmd);
+	drawCmd->id = RCMD_DRAW_BASIS2D;
 
-	cmd->id = RCMD_DRAW_BASIS2D;
+    Draw::Commands::DrawBasis2dCmd *cmd = (Draw::Commands::DrawBasis2dCmd*)((byte*)drawCmd + sizeof(drawCmd->id));
+
 	cmd->color = color;
 	cmd->origin = origin;
 	cmd->xAxis = xAxis;
@@ -399,9 +405,11 @@ PushBasis2d(PushBuffer *renderCommands, V2 xAxis, V2 yAxis, V2 origin, V2 basisP
 function void
 PushDrawRectangle(PushBuffer *renderCommands, V2 min, V2 max, V4 color)
 {
-    DrawRectangleCmd *cmd = PushRenderCommandType(renderCommands, DrawRectangleCmd);
+    Draw *drawCmd = PushRenderCommandType(renderCommands, Draw);
+	drawCmd->id = RCMD_DRAW_RECTANGLE;
 
-    cmd->id = RCMD_DRAW_RECTANGLE;
+    Draw::Commands::DrawRectangleCmd *cmd = (Draw::Commands::DrawRectangleCmd*)((byte*)drawCmd + sizeof(drawCmd->id));
+
     cmd->min = min;
     cmd->max = max;
     cmd->color = color;
@@ -410,9 +418,11 @@ PushDrawRectangle(PushBuffer *renderCommands, V2 min, V2 max, V4 color)
 function void
 PushDrawRectangle(PushBuffer *renderCommands, f32 minX, f32 minY, f32 maxX, f32 maxY, V4 color)
 {
-    DrawRectangleCmd *cmd = PushRenderCommandType(renderCommands, DrawRectangleCmd);
+    Draw *drawCmd = PushRenderCommandType(renderCommands, Draw::Commands::DrawRectangleCmd);
+	drawCmd->id = RCMD_DRAW_RECTANGLE;
 
-    cmd->id = RCMD_DRAW_RECTANGLE;
+    Draw::Commands::DrawRectangleCmd *cmd = (Draw::Commands::DrawRectangleCmd*)((byte*)drawCmd + sizeof(drawCmd->id));
+
     cmd->min = MakeV2(minX, minY);
     cmd->max = MakeV2(maxX, maxY);
     cmd->color = color;
@@ -423,8 +433,11 @@ PushDrawBitmap(PushBuffer *renderCommands, Bitmap *bitmap,
                       f32 roriginX, f32 roriginY,
                       f32 alignX, f32 alignY)
 {
-    DrawBitmapCmd *cmd = PushRenderCommandType(renderCommands, DrawBitmapCmd);
-    cmd->id = RCMD_DRAW_BITMAP;
+    Draw *drawCmd = PushRenderCommandType(renderCommands, Draw);
+    drawCmd->id = RCMD_DRAW_BITMAP;
+
+    Draw::Commands::DrawBitmapCmd *cmd = (Draw::Commands::DrawBitmapCmd*)((byte*)drawCmd + sizeof(drawCmd->id));
+
     cmd->originX = roriginX;
     cmd->originY = roriginY;
     cmd->alignX = alignX;
@@ -438,7 +451,8 @@ ExecuteRenderBuffer(Bitmap *outputTarget, const void *data)
 {
     for (;;) 
     {
-        switch(*Cast(const u32 *, data)) 
+		// + 1 is for skipping the id field within the Draw structure.
+		switch(Cast(Draw*, data)->id)
         {
 			// Render buffer empty now.
             case RCMD_END_OF_CMDS:
@@ -447,19 +461,19 @@ ExecuteRenderBuffer(Bitmap *outputTarget, const void *data)
             } break;
 			case RCMD_DRAW_BASIS2D:
 			{
-				data = DrawBasis2d(outputTarget, data);
+				data = DrawBasis2d(outputTarget, Cast(u32*, data));
 			} break;
             case RCMD_DRAW_RECTANGLE:
             {
-                data = DrawRectangle(outputTarget, data);
+                data = DrawRectangle(outputTarget, Cast(u32*, data));
             } break;
             case RCMD_DRAW_BITMAP:
             {
-                data = DrawBitmap(outputTarget, data);
+                data = DrawBitmap(outputTarget, Cast(u32*, data));
             } break;
             case RCMD_SWAP_BUFFERS:
             {
-                data = SwapBuffers(outputTarget, data);
+                data = SwapBuffers(outputTarget, Cast(u32*, data));
             } break;
             default:
             {
