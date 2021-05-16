@@ -209,11 +209,29 @@ Dot(V3 a, V3 b)
 }
 
 function f32
-LengthSquared(V2 a)
+LengthSquared(V2 v)
 {
-    f32 result = Dot(a, a);
+    f32 result = Dot(v, v);
     return result;
 }
+
+function V2
+Normalize(V2 v)
+{
+	V2 result = {};
+	f32 len = Dot(v, v);
+	len = (f32)sqrtf(len);
+
+	if (len)
+	{
+		f32 ilen = 1.0f / len;
+		result[0] = v[0] * ilen;
+		result[1] = v[1] * ilen;
+	}
+
+	return result;
+}
+
 
 function V4
 PremultiplyAlpha(V4 v)
