@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include <Windows.h>
 #include <gl\GL.h>
 
@@ -5,10 +6,20 @@
 
 #include <string.h>
 
+#define _USE_MATH_DEFINES
+#include <math.h>
 
 #include "vector.h"
 #include "intrinsics.h"
 #include "3d.h"
+
+#define TIMER_RESOLUTION 1
+#define USEC_PER_SIM (u32)(16.677f*1000.0f)
+
+global u64 globalTimeResidual = 0;
+global u64 globalTimeFrequency = 0;
+//global DWORD global_time_base = 0;
+
 
 typedef struct EventType
 {
@@ -25,7 +36,15 @@ typedef struct AppWindow
 	HWND handle;
 } AppWindow;
 
-inline function HDC
+function void
+SysDebugPrintR32(f32 value)
+{
+    char buffer[256];
+    sprintf(buffer, "%f\n", value);
+    OutputDebugStringA(buffer);
+}
+
+function HDC
 SysGetWindowContextHandle(HWND windowHandle)
 {
 	HDC result = 0;
@@ -34,7 +53,7 @@ SysGetWindowContextHandle(HWND windowHandle)
 	return result;
 }
 
-inline function void
+function void
 SysReleaseWindowContextHandle(HWND windowHandle, HDC contextHandle)
 {
 	Ensure(windowHandle, ReleaseDC(windowHandle, contextHandle));
@@ -274,6 +293,75 @@ SysMakeWindow(HINSTANCE module, s32 x, s32 y, s32 width, s32 height)
 	return window;
 }
 
+function void
+SysSleep(DWORD time)
+{
+    Sleep(time);
+}
+
+function u64
+SysGetMicroseconds()
+{
+    u64 result;
+    LARGE_INTEGER counter;
+    QueryPerformanceCounter(&counter);
+
+    result = (s64)(((f64)counter.QuadPart / globalTimeFrequency)*1000000);
+
+    return result;
+}
+
+function void
+SysBeginTimer()
+{
+    timeBeginPeriod(TIMER_RESOLUTION);
+}
+
+function void
+SysEndTimer()
+{
+    timeEndPeriod(TIMER_RESOLUTION);
+}
+
+
+function s32
+SysWaitForFrame(u64 nowTime)
+{
+    s32 frameUpdateCount = 0;
+    u64 lastFrameTime = nowTime;
+    for(;;)
+    {
+        u64 currentFrameTime = SysGetMicroseconds();
+        u64 deltaMicroSeconds = currentFrameTime - lastFrameTime;
+        lastFrameTime = currentFrameTime;
+
+        globalTimeResidual += deltaMicroSeconds;
+
+        for(;;)
+        {
+            // how much to wait before running the next frame
+            if(globalTimeResidual < USEC_PER_SIM)
+            {
+                break;
+            }
+            globalTimeResidual -= USEC_PER_SIM;
+            frameUpdateCount++;
+        }
+        if(frameUpdateCount > 5)
+        {
+            frameUpdateCount = 5;
+        }
+        if(frameUpdateCount > 0)
+        {
+            break;
+        }
+        SysSleep(0);
+    }
+
+    return frameUpdateCount;
+}
+
+
 s32 CALLBACK
 WinMain(HINSTANCE appInstance,
         HINSTANCE prevAppInstance,
@@ -294,6 +382,14 @@ WinMain(HINSTANCE appInstance,
 	SetWindowLongPtr(application.window.handle, GWLP_USERDATA, (LONG_PTR)&application);
 	InitializeOpenGL(&application);
 
+	SysBeginTimer();
+	LARGE_INTEGER perfCounterFrequency;
+    QueryPerformanceFrequency(&perfCounterFrequency);
+    globalTimeFrequency = perfCounterFrequency.QuadPart;
+
+	u64 lastBlitTime = SysGetMicroseconds();
+	u64 debugFrameTimeBegin = SysGetMicroseconds();
+
 	while(!application.isQuitting)
 	{
 		// Pump the message loop.
@@ -307,7 +403,7 @@ WinMain(HINSTANCE appInstance,
 		while(EventCount(&eventQueue))
 		{
 			RING_BUFFER_TYPE ev = GetNext(&eventQueue);
-			Printf("Event: %u\n", ev.message);
+			//Printf("Event: %u\n", ev.message);
 			if(ev.message == WM_QUIT)
 			{
 				application.isQuitting = true;
@@ -323,34 +419,49 @@ WinMain(HINSTANCE appInstance,
 			f32 bottom = (f32)application.window.region.top;
 			SysClearTexture(&application.renderer->activeTexture);
 
-			PushDrawRectangle(&renderer.renderCommands, left, top, right, bottom, MakeV4(0.5f, 0.5f, 0.5f, 1.0f));
+			//PushDrawRectangle(&renderer.renderCommands, left, top, right, bottom, MakeV4(0.5f, 0.5f, 0.5f, 1.0f));
 
-			V2 xAxis = {1.0f, 0.0f};
-			V2 yAxis = {0.0f, 1.0f};
-			V2 origin = {50.0f, 100.0f};
+#define DegreesToRadians(degrees) ((f32)M_PI / 180.0f) * degrees
+
+			static f32 degrees = 0.0f;
+			V2 xAxis = {cosf(DegreesToRadians(degrees)), sinf(DegreesToRadians(degrees))};
+			V2 yAxis = {-sinf(DegreesToRadians(degrees)), cosf(DegreesToRadians(degrees))};
+			degrees += 1.0f;
+
+			V2 origin = {100.0f, 100.0f};
 			f32 axisScale = 100.0f;
-			V2 basisPoint = {5.0f, 5.0f};
+			V2 basisPoint = {10.0f, 10.0f};
 
-			PushBasis2d(&renderer.renderCommands, xAxis, yAxis, origin, basisPoint, axisScale, MakeV4(0.4f, 0.1f, 0.8f, 1.0f));
+			PushBasis2d(&renderer.renderCommands, xAxis, yAxis, origin, basisPoint, axisScale, MakeV4(1.0f, 0.0f, 0.0f, 1.0f));
 
 			V2 offset = {10.0f, 15.0f};
 			axisScale *= 2.0f;
 			origin += offset;
 
-			PushBasis2d(&renderer.renderCommands, xAxis, yAxis, origin, basisPoint, axisScale, MakeV4(0.8f, 0.5f, 0.8f, 1.0f));
+			//PushBasis2d(&renderer.renderCommands, xAxis, yAxis, origin, basisPoint, axisScale, MakeV4(0.8f, 0.5f, 0.8f, 1.0f));
 
 			axisScale *= 2.0f;
 			offset *= 2.0f;
 			origin += offset;
 
-			PushBasis2d(&renderer.renderCommands, xAxis, yAxis, origin, basisPoint, axisScale, MakeV4(0.2f, 0.5f, 0.9f, 1.0f));
+			//PushBasis2d(&renderer.renderCommands, xAxis, yAxis, origin, basisPoint, axisScale, MakeV4(0.2f, 0.5f, 0.9f, 1.0f));
 		}
 
 		PushEndDraw(&application.renderer->activeTexture, &renderer.renderCommands, &application.window);
 		IssueRenderCommands(&application.renderer->activeTexture, &renderer.renderCommands);
+
+		SysWaitForFrame(lastBlitTime);
+		lastBlitTime = SysGetMicroseconds();
+
+		u64 debugFrameTimeEnd = SysGetMicroseconds();
+		u64 debugFrameTimeDelta = debugFrameTimeEnd - debugFrameTimeBegin;
+		debugFrameTimeBegin = debugFrameTimeEnd;
+		SysDebugPrintR32((f32)debugFrameTimeDelta/1000.0f);
 	}
 
 	quit:
+
+	SysEndTimer();
 
 	return 0;
 }
