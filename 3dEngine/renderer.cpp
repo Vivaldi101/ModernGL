@@ -9,11 +9,7 @@ enum
 	RCMD_SWAP_BUFFERS,
 };
 
-#ifdef _DEBUG
 #define GetRenderCommandData(cmd) (cmd *)((byte*)(renderBuffer) + sizeof(((Draw*)renderBuffer)->id));
-#else
-#define GetRenderCommandData(cmd) (cmd *)renderBuffer;
-#endif
 #define PushRenderCommandType(buffer, type) (Draw *)(PushRenderCommandType_)((buffer), sizeof(type) + sizeof(Draw))
 
 // TODO: Pass transforms.
@@ -24,7 +20,7 @@ name(Bitmap *outputTarget, const void *renderBuffer)
 
 struct Draw
 {
-	u32 id;
+	u32 id; // Important! Do not put any field before or after id.
 	union Commands
 	{
 		struct DrawBasis2dCmd
@@ -39,9 +35,9 @@ struct Draw
 
 		struct DrawRectangleCmd
 		{
+			V4 color;
 			V2 min;
 			V2 max;
-			V4 color;
 		};
 
 		struct DrawBitmapCmd
@@ -251,13 +247,75 @@ DrawBitmapToOutputTarget(Bitmap *outputTarget, Bitmap *bitmap, f32 roriginX, f32
 }
 
 function void
+DrawRectangleToOutputTarget(Bitmap *outputTarget, V2 origin, V2 xAxis, V2 yAxis, V4 color)
+{
+	// TODO: Line clip basis vector to output target.
+	V2 min = origin;
+	V2 max = min + xAxis + yAxis;
+
+	// Clip to output target.
+    if(min.x < 0)
+    {
+        min.x = 0;
+    }
+    if(min.y < 0)
+    {
+        min.y = 0;
+    }
+
+    if(max.x > outputTarget->width)
+    {
+        max.x = outputTarget->width;
+    }
+    if(max.y > outputTarget->height)
+    {
+        max.y = outputTarget->height;
+    }
+
+	s32 outputTargetWidth = outputTarget->width;
+	s32 outputTargetHeight = outputTarget->height;
+	s32 pitch = outputTarget->pitch;
+    u32 packedColor = PackRGBA(color);
+	byte *pixelMemory = Cast(byte*, outputTarget->memory);
+
+	for(s32 y = 0;
+		y < outputTargetHeight;
+		y++)
+    {
+		u32 *pixels = Cast(u32*, pixelMemory);
+        for(s32 x = 0;
+			x < outputTargetWidth;
+			x++)
+        {
+			V2 test = {(f32)x, (f32)y};
+
+			// TODO: Fixed point?
+			f32 edgeTest0 = Dot(test - min, -yAxis);			// Bottom.
+			f32 edgeTest1 = Dot(test - (max - 1.0f), xAxis);	// Right.
+			f32 edgeTest2 = Dot(test - (max - 1.0f), yAxis);	// Top.
+			f32 edgeTest3 = Dot(test - min, -xAxis);			// Left.
+
+			if (edgeTest0 < 0.0f &&
+				edgeTest1 < 0.0f &&
+				edgeTest2 < 0.0f &&
+				edgeTest3 < 0.0f)
+			{
+				*pixels = packedColor;
+			}
+			pixels++;
+        }
+        pixelMemory += pitch;
+    }
+}
+
+function void
 DrawRectangleToOutputTarget(Bitmap *outputTarget, V2 min, V2 max, V4 color)
 {
 	// Actually have a rectangle to draw.
-	assert(min.x < max.x);
-	assert(min.y < max.y);
+	Assert(min.x < max.x);
+	Assert(min.y < max.y);
 
-    s32 roundedMinX = RoundReal32ToS32(min.x);
+	s32 roundedMinX = RoundReal32ToS32(min.x);
     s32 roundedMinY = RoundReal32ToS32(min.y);
     s32 roundedMaxX = RoundReal32ToS32(max.x);
     s32 roundedMaxY = RoundReal32ToS32(max.y);
@@ -317,27 +375,24 @@ RenderCommand(DrawBasis2d)
     Draw::Commands::DrawBasis2dCmd *cmd = GetRenderCommandData(Draw::Commands::DrawBasis2dCmd);
 
 	V2 origin = cmd->origin;
-	V2 xAxis = (cmd->xAxis * cmd->axisScale) + origin;
-	V2 yAxis = (cmd->yAxis * cmd->axisScale) + origin;
-	V2 basisPoint = cmd->basisPoint;
-	V4 basisColor = {1.0f, 0.0f, 1.0f, 1.0f};
-	V2 xyMax = ((cmd->xAxis + cmd->yAxis) * cmd->axisScale) + origin;
 
-	DrawRectangleToOutputTarget(outputTarget, origin, xyMax, cmd->color);
+	V2 xAxis = cmd->xAxis * cmd->axisScale;
+	V2 yAxis = cmd->yAxis * cmd->axisScale;
+
+	V2 basisPoint = cmd->basisPoint;
+	V4 basisColor = {1.0f, 1.0f, 1.0f, 1.0f};
+	V2 xyMax = xAxis + yAxis;
+
+	DrawRectangleToOutputTarget(outputTarget, origin, xAxis, yAxis, cmd->color);
+
+	xAxis = Normalize(xAxis) * basisPoint.x;
+	yAxis = Normalize(yAxis) * basisPoint.y;
 
 	// Origin point.
-	DrawRectangleToOutputTarget(outputTarget, origin, origin + basisPoint, basisColor);
-
-	// Max x point.
-	xAxis.x -= basisPoint.x;
-	DrawRectangleToOutputTarget(outputTarget, xAxis, xAxis + basisPoint, basisColor);
-
-	// Max y point.
-	yAxis.y -= basisPoint.y;
-	DrawRectangleToOutputTarget(outputTarget, yAxis, yAxis + basisPoint, basisColor);
+	DrawRectangleToOutputTarget(outputTarget, origin, xAxis, yAxis, basisColor);
 
 	// Max x & y point.
-	DrawRectangleToOutputTarget(outputTarget, xyMax - basisPoint, xyMax, basisColor);
+	DrawRectangleToOutputTarget(outputTarget, origin + xyMax - (xAxis + yAxis), xAxis, yAxis, basisColor);
 
     return Cast(const void *, cmd + 1);
 }
