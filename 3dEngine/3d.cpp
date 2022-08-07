@@ -1,58 +1,46 @@
 #ifndef _3d_H
 #define _3d_H
 
-// TODO: SIMD
-typedef struct Plane
-{
-	f32 a;
-	f32 b;
-	f32 c;
-	f32 d;
-} Plane;
+#include "vector.h"
+#include "matrix.h"
+#include "geometry.h"
 
-typedef struct Vertex
-{
-	f32 x;
-	f32 y;
-	f32 z;
-	f32 u;
-	f32 v;
-	V3 normal;
-} Vertex;
 
-typedef struct Face
+///////////////////////////////////////////////////////////////////////////////
+// return a perspective frustum with 6 params similar to glFrustum()
+// (left, right, bottom, top, near, far)
+///////////////////////////////////////////////////////////////////////////////
+function
+Matrix4 setFrustum(float l, float r, float b, float t, float n, float f)
 {
-	Vertex v0;
-	Vertex v1;
-	Vertex v2;
-	Plane normal;
-} Face;
+    Matrix4 matrix;
 
-typedef struct Pyramid
-{
-	Plane p0; 
-	Plane p1; 
-	Plane p2; 
-	Plane p4;
-} Pyramid;
+    matrix[0]  =  2 * n / (r - l);
+    matrix[5]  =  2 * n / (t - b);
+    matrix[8]  =  (r + l) / (r - l);
+    matrix[9]  =  (t + b) / (t - b);
+    matrix[10] = -(f + n) / (f - n);
+    matrix[11] = -1;
+    matrix[14] = -(2 * f * n) / (f - n);
+    matrix[15] =  0;
 
-typedef struct Point2d
-{
-	f32 x;
-	f32 y;
-} Point2d;
+    return matrix;
+}
 
-typedef struct Point2dU32
+///////////////////////////////////////////////////////////////////////////////
+// return a symmetric perspective frustum with 4 params similar to
+// gluPerspective() (vertical field of view, aspect ratio, near, far)
+///////////////////////////////////////////////////////////////////////////////
+function
+Matrix4 setFrustum(float fovY, float aspectRatio, float front, float back)
 {
-	u32 x;
-	u32 y;
-} Point2dU32;
+    float tangent = tanf(DegreesToRadians(fovY / 2));   // tangent of half fovY
+    float height = front * tangent;           // half height of near plane
+    float width = height * aspectRatio;       // half width of near plane
 
-typedef struct Point2dS32
-{
-	s32 x;
-	s32 y;
-} Point2dS32;
+    // params: left, right, bottom, top, near, far
+    return setFrustum(-width, width, -height, height, front, back);
+}
 
 #if 0
 function Vec2

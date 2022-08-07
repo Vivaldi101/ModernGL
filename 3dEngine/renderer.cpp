@@ -1,4 +1,3 @@
-
 enum 
 {
 	RCMD_CLEAR = 1,
@@ -30,7 +29,6 @@ struct Draw
 			V2 xAxis;
 			V2 yAxis;
 			V2 basisPoint;
-			f32 axisScale;
 		};
 
 		struct DrawRectangleCmd
@@ -43,10 +41,9 @@ struct Draw
 		struct DrawBitmapCmd
 		{
 			Bitmap *bitmap;
-			f32 originX;
-			f32 originY;
-			f32 alignX;
-			f32 alignY;
+			V2 origin;
+			V2 xAxis;
+			V2 yAxis;
 		};
 
 		struct SwapBuffersCmd
@@ -59,102 +56,11 @@ struct Draw
 	};
 };
 
-function void
-DrawTextureToRegion(void* textureMemory, Rectangle2 drawRegion)
-{
-	s32 width = drawRegion.right - drawRegion.left;
-	s32 height = drawRegion.top - drawRegion.bottom;
-
-	Defer(width >= 2 && height >= 2, true)
-	{
-		// Test margin.
-		int pixelMargin = 0;
-		glViewport(0 + pixelMargin, 0 + pixelMargin, width - pixelMargin*1, height - pixelMargin*1);
-		{
-			// Texturing.
-			// TODO: Refactor.
-			persistent b32 initialize = false;
-			u32 textureHandle = 0;
-			if(!initialize)
-			{
-				glGenTextures(1, &textureHandle);
-				initialize = true;
-			}
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, textureMemory);
-
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-			glEnable(GL_TEXTURE_2D);
-		}
-		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT);
-
-		glMatrixMode(GL_TEXTURE);
-		glLoadIdentity();
-
-		glMatrixMode(GL_MODELVIEW);
-		glLoadIdentity();
-
-		glMatrixMode(GL_PROJECTION);
-		glLoadIdentity();
-		{
-			f32 a = 2.0f / (width - 1.0f);
-			f32 b = 2.0f / (height - 1.0f);
-			f32 projectionMatrix[] =
-			{
-				a, 0, 0, 0,
-				0, b, 0, 0,
-				0, 0, 1, 0,
-			   -1, -1, 0, 1,
-			};
-			glLoadMatrixf(projectionMatrix);
-		}
-
-		//glDisable(GL_TEXTURE_2D);
-		glBegin(GL_TRIANGLES);
-		{
-			f32 left = 0.0f;
-			f32 top = 0.0f;
-
-			f32 right = width - 1.0f;
-			f32 bottom = height - 1.0f;
-
-			// Upper left triangle.
-			//glColor3f(1.0f, 0.0f, 0.0f);
-			glTexCoord2f(0.0f, 0.0f);
-			glVertex2f(left, top);
-
-			//glColor3f(0.0f, 1.0f, 0.0f);
-			glTexCoord2f(0.0f, 1.0f);
-			glVertex2f(left, bottom);
-
-			//glColor3f(0.0f, 0.0f, 1.0f);
-			glTexCoord2f(1.0f, 0.0f);
-			glVertex2f(right, top);
-
-			// Lower right triangle.
-			//glColor3f(0.0f, 1.0f, 0.0f);
-			glTexCoord2f(0.0f, 1.0f);
-			glVertex2f(left, bottom);
-
-			//glColor3f(1.0f, 0.0f, 0.0f);
-			glTexCoord2f(1.0f, 1.0f);
-			glVertex2f(right, bottom);
-
-			//glColor3f(0.0f, 0.0f, 1.0f);
-			glTexCoord2f(1.0f, 0.0f);
-			glVertex2f(right, top);
-		}
-		glEnd();
-	}
-}
 
 // Assumes: Color byte order in memory is b[0]==B b[1]==G b[2]==R b[3]==A: BGRA
+#if 0
 function void
-DrawBitmapToOutputTarget(Bitmap *outputTarget, Bitmap *bitmap, f32 roriginX, f32 roriginY, f32 alignX, f32 alignY)
+DrawBitmapToOutputTarget(Bitmap *outputTarget, Bitmap *bitmap, V2 origin, V2 xAxis, V2 yAxis, f32 alignX, f32 alignY)
 {
     void *outputTargetPixels = outputTarget->memory;
     void *bitmapPixels = bitmap->memory;
@@ -167,8 +73,8 @@ DrawBitmapToOutputTarget(Bitmap *outputTarget, Bitmap *bitmap, f32 roriginX, f32
     s32 bitmapWidth = bitmap->width;
     s32 bitmapBpp = bitmapPitch / bitmapWidth;
     
-    s32 minX = RoundReal32ToS32(roriginX - alignX);
-    s32 minY = RoundReal32ToS32(roriginY - alignY);
+    s32 minX = RoundReal32ToS32(origin.x - alignX);
+    s32 minY = RoundReal32ToS32(origin.y - alignY);
     
     s32 maxX = minX + bitmapWidth;
     s32 maxY = minY + bitmapHeight;
@@ -235,7 +141,6 @@ DrawBitmapToOutputTarget(Bitmap *outputTarget, Bitmap *bitmap, f32 roriginX, f32
             u32 cblue = (u32)(cfinal.b + 0.5f);
             
             u32 color = (calpha << 24) | (cred << 16) | (cgreen << 8) | (cblue << 0);
-            //u32 color = (255 << 24) | (cred << 16) | (cgreen << 8) | (cblue << 0);
             
             *outputTargetPixel = color;
             outputTargetPixel++;
@@ -243,6 +148,86 @@ DrawBitmapToOutputTarget(Bitmap *outputTarget, Bitmap *bitmap, f32 roriginX, f32
         }
         outputTargetRow += outputTargetPitch;
         bitmapRow += bitmapPitch;
+    }
+}
+#endif
+
+function void
+DrawBitmapToOutputTarget(Bitmap *outputTarget, Bitmap *bitmap, V2 origin, V2 xAxis, V2 yAxis)
+{
+	V2 min = origin;
+	V2 max = min + xAxis + yAxis;
+
+	// Clip to output target.
+    if(min.x < 0)
+    {
+        min.x = 0;
+    }
+    if(min.y < 0)
+    {
+        min.y = 0;
+    }
+
+    if(max.x > outputTarget->width)
+    {
+        max.x = (f32)outputTarget->width;
+    }
+    if(max.y > outputTarget->height)
+    {
+        max.y = (f32)outputTarget->height;
+    }
+
+	s32 outputTargetWidth = outputTarget->width;
+	s32 outputTargetHeight = outputTarget->height;
+	s32 pitch = outputTarget->pitch;
+	byte *pixelMemory = Cast(byte*, outputTarget->memory);
+
+	r32 invXLengthSquared = 1.0f / LengthSquared(xAxis);
+	r32 invYLengthSquared = 1.0f / LengthSquared(yAxis);
+
+	for(s32 y = 0;
+		y < outputTargetHeight;
+		y++)
+    {
+		u32 *pixels = Cast(u32*, pixelMemory);
+        for(s32 x = 0;
+			x < outputTargetWidth;
+			x++)
+        {
+			V2 testPixel = {(f32)x, (f32)y};
+
+			// TODO: Fixed point?
+			f32 edgeTest0 = Dot(testPixel - min, -yAxis);	// Bottom.
+			f32 edgeTest1 = Dot(testPixel - max, xAxis);	// Right.
+			f32 edgeTest2 = Dot(testPixel - max, yAxis);	// Top.
+			f32 edgeTest3 = Dot(testPixel - min, -xAxis);	// Left.
+
+			if (edgeTest0 < 0.0f &&
+				edgeTest1 < 0.0f &&
+				edgeTest2 < 0.0f &&
+				edgeTest3 < 0.0f)
+			{
+				r32 u = invXLengthSquared * Dot(testPixel - min, xAxis);
+				r32 v = invYLengthSquared * Dot(testPixel - min, yAxis);
+
+				//Assert(0.0f <= u && u <= 1.0f);
+				//Assert(0.0f <= v && v <= 1.0f);
+
+				// TODO: Proper rounding.
+
+				s32 uLength = Cast(s32, u*(bitmap->width-1));
+				s32 vLength = Cast(s32, v*(bitmap->height-1));
+
+				Assert(0 <= uLength && uLength < bitmap->width);
+				Assert(0 <= uLength && uLength < bitmap->height);
+
+				u8* texel = (Cast(u8*, bitmap->memory) + vLength*bitmap->pitch + uLength*BYTES_PER_PIXEL);
+
+				*pixels = *Cast(u32*, texel);
+			}
+			pixels++;
+        }
+        pixelMemory += pitch;
     }
 }
 
@@ -265,11 +250,11 @@ DrawRectangleToOutputTarget(Bitmap *outputTarget, V2 origin, V2 xAxis, V2 yAxis,
 
     if(max.x > outputTarget->width)
     {
-        max.x = outputTarget->width;
+        max.x = (f32)outputTarget->width;
     }
     if(max.y > outputTarget->height)
     {
-        max.y = outputTarget->height;
+        max.y = (f32)outputTarget->height;
     }
 
 	s32 outputTargetWidth = outputTarget->width;
@@ -306,6 +291,57 @@ DrawRectangleToOutputTarget(Bitmap *outputTarget, V2 origin, V2 xAxis, V2 yAxis,
         }
         pixelMemory += pitch;
     }
+}
+
+function void
+DrawLineToOutputTarget(Bitmap *outputTarget, V2 min, V2 max, V4 color)
+{
+	// Actually have a line to draw.
+	Assert(min.x < max.x);
+	Assert(min.y < max.y);
+
+	s32 roundedMinX = RoundReal32ToS32(min.x);
+    s32 roundedMinY = RoundReal32ToS32(min.y);
+    s32 roundedMaxX = RoundReal32ToS32(max.x);
+    s32 roundedMaxY = RoundReal32ToS32(max.y);
+    
+    u32 packedColor = PackRGBA(color);
+    
+	// Clip to output outputTarget.
+    if(roundedMinX < 0)
+    {
+        roundedMinX = 0;
+    }
+    if(roundedMinY < 0)
+    {
+        roundedMinY = 0;
+    }
+    if(roundedMaxX > outputTarget->width)
+    {
+        roundedMaxX = outputTarget->width;
+    }
+    if(roundedMaxY > outputTarget->height)
+    {
+        roundedMaxY = outputTarget->height;
+    }
+    
+	u32 pitch = outputTarget->pitch;
+    byte *row = (byte *)outputTarget->memory + (roundedMinY*pitch) + (roundedMinX*BYTES_PER_PIXEL);
+    
+    for(s32 y = roundedMinY; y < roundedMaxY; y++)
+    {
+        u32 *pixel = (u32 *)row;
+        for(s32 x = roundedMinX; x < roundedMaxX; x++)
+        {
+            *pixel++ = packedColor;
+        }
+        row += pitch;
+    }
+}
+
+function void
+DrawPixel(void* outputBuffer, u32 outputBufferPitch, u32 x, u32 y)
+{
 }
 
 function void
@@ -376,8 +412,8 @@ RenderCommand(DrawBasis2d)
 
 	V2 origin = cmd->origin;
 
-	V2 xAxis = cmd->xAxis * cmd->axisScale;
-	V2 yAxis = cmd->yAxis * cmd->axisScale;
+	V2 xAxis = cmd->xAxis;
+	V2 yAxis = cmd->yAxis;
 
 	V2 basisPoint = cmd->basisPoint;
 	V4 basisColor = {1.0f, 1.0f, 1.0f, 1.0f};
@@ -400,6 +436,7 @@ RenderCommand(DrawBasis2d)
 RenderCommand(DrawRectangle)
 {
     Draw::Commands::DrawRectangleCmd *cmd = GetRenderCommandData(Draw::Commands::DrawRectangleCmd);
+
     DrawRectangleToOutputTarget(outputTarget, cmd->min, cmd->max, cmd->color);
     
     return Cast(const void *, cmd + 1);
@@ -408,7 +445,8 @@ RenderCommand(DrawRectangle)
 RenderCommand(DrawBitmap)
 {
     Draw::Commands::DrawBitmapCmd *cmd = GetRenderCommandData(Draw::Commands::DrawBitmapCmd);
-    DrawBitmapToOutputTarget(outputTarget, cmd->bitmap, cmd->originX, cmd->originY, cmd->alignX, cmd->alignY);
+
+	DrawBitmapToOutputTarget(outputTarget, cmd->bitmap, cmd->origin, cmd->xAxis, cmd->yAxis);
     
     return Cast(const void *, cmd + 1);
 }
@@ -442,7 +480,7 @@ PushEndDraw(Bitmap* activeTexture, PushBuffer *renderCommands, AppWindow* window
 }
 
 function void
-PushBasis2d(PushBuffer *renderCommands, V2 xAxis, V2 yAxis, V2 origin, V2 basisPoint, f32 axisScale, V4 color)
+PushDrawBasis2d(PushBuffer *renderCommands, V2 xAxis, V2 yAxis, V2 origin, V2 basisPoint, V4 color)
 {
 	Draw *drawCmd = PushRenderCommandType(renderCommands, Draw::Commands::DrawBasis2dCmd);
 	drawCmd->id = RCMD_DRAW_BASIS2D;
@@ -453,8 +491,21 @@ PushBasis2d(PushBuffer *renderCommands, V2 xAxis, V2 yAxis, V2 origin, V2 basisP
 	cmd->origin = origin;
 	cmd->xAxis = xAxis;
 	cmd->yAxis = yAxis;
-	cmd->axisScale = axisScale;
 	cmd->basisPoint = basisPoint;
+}
+
+function void
+PushDrawBitmap(PushBuffer *renderCommands, Bitmap *bitmap, V2 xAxis, V2 yAxis, V2 origin, f32 alignX, f32 alignY)
+{
+    Draw *drawCmd = PushRenderCommandType(renderCommands, Draw::Commands::DrawBitmapCmd);
+    drawCmd->id = RCMD_DRAW_BITMAP;
+
+    Draw::Commands::DrawBitmapCmd *cmd = (Draw::Commands::DrawBitmapCmd*)((byte*)drawCmd + sizeof(drawCmd->id));
+
+    cmd->bitmap = bitmap;
+    cmd->origin = origin;
+	cmd->xAxis = xAxis;
+	cmd->yAxis = yAxis;
 }
 
 function void
@@ -484,29 +535,10 @@ PushDrawRectangle(PushBuffer *renderCommands, f32 minX, f32 minY, f32 maxX, f32 
 }
 
 function void
-PushDrawBitmap(PushBuffer *renderCommands, Bitmap *bitmap,
-                      f32 roriginX, f32 roriginY,
-                      f32 alignX, f32 alignY)
-{
-    Draw *drawCmd = PushRenderCommandType(renderCommands, Draw);
-    drawCmd->id = RCMD_DRAW_BITMAP;
-
-    Draw::Commands::DrawBitmapCmd *cmd = (Draw::Commands::DrawBitmapCmd*)((byte*)drawCmd + sizeof(drawCmd->id));
-
-    cmd->originX = roriginX;
-    cmd->originY = roriginY;
-    cmd->alignX = alignX;
-    cmd->alignY = alignY;
-    cmd->bitmap = bitmap;
-}
-
-
-function void
 ExecuteRenderBuffer(Bitmap *outputTarget, const void *data) 
 {
     for (;;) 
     {
-		// + 1 is for skipping the id field within the Draw structure.
 		switch(Cast(Draw*, data)->id)
         {
 			// Render buffer empty now.
@@ -529,6 +561,7 @@ ExecuteRenderBuffer(Bitmap *outputTarget, const void *data)
             case RCMD_SWAP_BUFFERS:
             {
                 data = SwapBuffers(outputTarget, Cast(u32*, data));
+				return;
             } break;
             default:
             {
@@ -538,15 +571,15 @@ ExecuteRenderBuffer(Bitmap *outputTarget, const void *data)
     }
 }
 
-function void 
-IssueRenderCommands(Bitmap* activeTexture, PushBuffer *renderCommands) 
+void
+IssueRenderCommands(RenderState* renderState) 
 {
 	// Mark the end of render command buffer.
-	*Cast(u32 *, (byte*)renderCommands->memory + renderCommands->usedSize) = RCMD_END_OF_CMDS;
+	*Cast(u32 *, (byte*)renderState->renderCommands->memory + renderState->renderCommands->usedSize) = RCMD_END_OF_CMDS;
 
     // TODO: Add custom textures to be used for the final blit.
-	ExecuteRenderBuffer(activeTexture, renderCommands->memory);
-    
-    // Clear the render buffer at the end.
-	renderCommands->usedSize = 0;
+	ExecuteRenderBuffer(renderState->renderTarget, renderState->renderCommands->memory);
+
+	// Clear the render buffer at the end.
+	renderState->renderCommands->usedSize = 0;
 }

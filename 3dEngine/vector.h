@@ -215,12 +215,21 @@ LengthSquared(V2 v)
     return result;
 }
 
+function f32
+Length(V2 v)
+{
+    f32 result = Dot(v, v);
+	
+	result = sqrtf(result);
+
+    return result;
+}
+
 function V2
 Normalize(V2 v)
 {
 	V2 result = {};
-	f32 len = Dot(v, v);
-	len = (f32)sqrtf(len);
+	f32 len = Length(v);
 
 	if (len)
 	{
@@ -246,5 +255,4 @@ PremultiplyAlpha(V4 v)
     return result;
 }
 
-#endif   // VECTOR_H
-
+#endif
