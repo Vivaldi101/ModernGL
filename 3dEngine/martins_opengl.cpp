@@ -131,6 +131,38 @@ static LRESULT CALLBACK WindowProc(HWND wnd, UINT msg, WPARAM wparam, LPARAM lpa
     return DefWindowProcW(wnd, msg, wparam, lparam);
 }
 
+struct Position
+{
+	int x, y;
+};
+
+Position GetCursorWindowPosition(HWND window, int windowWidth, int windowHeight)
+{
+	Position result = {};
+
+	POINT cursorPoint = {};
+	GetCursorPos(&cursorPoint);
+
+	ScreenToClient(window, &cursorPoint);
+
+	result.x = cursorPoint.x;
+	result.y = cursorPoint.y;
+
+	result.x = (result.x < 0) ? 0 : result.x;
+	result.y = (result.y < 0) ? 0 : result.y;
+
+	result.x = (result.x >= windowWidth) ? windowWidth - 1: result.x;
+	result.y = (result.y >= windowHeight) ? windowHeight - 1: result.y;
+
+	Assert(result.x >= 0);
+	Assert(result.y >= 0);
+
+	Assert(result.x < windowWidth);
+	Assert(result.y < windowHeight);
+
+	return result;
+}
+
 // compares src string with dstlen characters from dst, returns 1 if they are equal, 0 if not
 static int StringsAreEqual(const char* src, const char* dst, size_t dstlen)
 {
@@ -251,6 +283,7 @@ static void GetWglFunctions(void)
 struct ShaderContext
 {
 	GLuint textureBinding;
+	GLuint rttBinding;
 	int width, height, bpp;
 	const void* texture;
 };
@@ -277,8 +310,8 @@ void loadDefaultTexture(ShaderContext* context)
 {
 	const unsigned int pixels[] =
 	{
-		0xff000000, 0xffffffff,
-		0xffffffff, 0xff000000,
+		0xffff00ff, 0xffffffff,
+		0xffffffff, 0xffff00ff,
 	};
 	context->width = context->height = 2;
 	context->bpp = 4;
@@ -310,51 +343,57 @@ int decodeID(int r, int g, int b)
 	return b + g * 256 + r * 256 * 256;
 }
 
-void drawPickedPrimitive(unsigned int drawIndex, unsigned int primitiveID)
+struct PixelBufferData
 {
-	// TODO:
-	//glDrawElementsBaseVertex(GL_TRIANGLES, 3, GL_UNSIGNED_INT, (void*)(sizeof(unsigned int)*(meshes[drawIndex] + primitiveID * 3)), 0);
-}
+	//unsigned int objectID;
+	//unsigned int drawID;
+	//unsigned int primitiveID;
+	unsigned char R;
+	unsigned char G;
+	unsigned char B;
+	unsigned char A;
+};
 
-void renderToTexture(int width, int height, GLuint pickingProgram, GLuint frameBuffer, GLuint rttFShader) 
+void drawToTexture(int width, int height, GLuint frameBuffer) 
 {
 	glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
 
+	// Clear frame buffer texture
 	glViewport(0, 0, width, height);
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glBindProgramPipeline(pickingProgram);
 
-	//const vec3 ids = encodeID((255));
-	const GLint objectUniform = 0;
-	const GLint drawUniform = 1;
-
-	glProgramUniform1ui(rttFShader, objectUniform, 1);
-	glProgramUniform1ui(rttFShader, drawUniform, 0);
-
-	glDrawArrays(GL_TRIANGLES, 0, 3);
+	// Draw triangles into it
+	glDrawArrays(GL_TRIANGLES, 0, 6);
 
 	glFlush();
 	glFinish();
 
+	// Restore default frame buffer
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+PixelBufferData readFromTexture(int x, int y, int width, int height, GLuint frameBuffer)
+{
+	PixelBufferData result = {};
+
+	// Read from frame buffer 
+	glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
+	glViewport(0, 0, width, height);
+
+	// Read from color texture
 	glReadBuffer(GL_COLOR_ATTACHMENT0);
+	glFlush();
+	glFinish();
 
-	struct PixelBufferData
-	{
-		unsigned int objectID;
-		unsigned int drawID;
-		unsigned int primitiveID;
-	};
+	// TODO: pass coordinates to read
+	// Center pixel
+	glReadPixels(x, height - y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, &result);
 
-	PixelBufferData pbd = {};
+	// Restore default frame buffer
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	// TODO: Pass mouse coordinates here
-	glReadPixels(width/2, height - (height/2), 1, 1, GL_RGB_INTEGER, GL_UNSIGNED_INT, &pbd);
-
-	if (pbd.objectID != 0)
-	{
-		drawPickedPrimitive(pbd.drawID, pbd.primitiveID);
-	}
+	return result;
 }
 
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, int cmdshow)
@@ -498,14 +537,26 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 			// position in clip-space 
 			// uv				
 			// color
-            { { -0.00f, +0.75f }, { 25.0f, 50.0f }, { 1, 0, 0 } },
-            { { +0.75f, -0.50f }, {  0.0f,  0.0f }, { 0, 1, 0 } },
-            { { -0.75f, -0.50f }, { 50.0f,  0.0f }, { 0, 0, 1 } },
+            //{ { -0.00f, +0.75f }, { 25.0f, 50.0f }, { 1, 0, 0 } },
+            //{ { +0.75f, -0.50f }, {  0.0f,  0.0f }, { 0, 1, 0 } },
+            //{ { -0.75f, -0.50f }, { 50.0f,  0.0f }, { 0, 0, 1 } },
+            { { -1.00f, -1.0f }, { 25.0f, 50.0f }, { 1, 0, 0 } },
+            { { +1.00f, +1.00f }, {  0.0f,  0.0f }, { 0, 1, 0 } },
+            { { -1.00f, +1.00f }, { 50.0f,  0.0f }, { 0, 0, 1 } },
+            { { -1.00f, -1.0f }, { 25.0f, 50.0f }, { 1, 0, 0 } },
+            { { +1.00f, -1.00f }, {  0.0f,  0.0f }, { 0, 1, 0 } },
+            { { +1.00f, +1.00f }, { 50.0f,  0.0f }, { 0, 0, 1 } },
         };
 
         glGenBuffers(1, &vbo);
         glBindBuffer(GL_ARRAY_BUFFER, vbo);
         glBufferStorage(GL_ARRAY_BUFFER, sizeof(verts), verts, 0);
+    }
+
+    // checkerboard texture, with 50% transparency on black colors
+	ShaderContext context = {};
+    {
+        loadDefaultTexture(&context);
     }
 
 	// render to texture
@@ -518,19 +569,23 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 
 		// create texture to use for rendering second pass
 		GLuint rtt = 0;
-		glGenTextures (1, &rtt);
-		glBindTexture (GL_TEXTURE_2D, rtt);
+		glGenTextures(1, &rtt);
+		glBindTexture(GL_TEXTURE_2D, rtt);
+
+		context.rttBinding = rtt;
 
 		// make the texture the same size as the viewport
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32UI, width, height, 0, GL_RGB_INTEGER, GL_UNSIGNED_INT, NULL);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 		// attach colour texture to fb
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rtt, 0);
+
+		glBindTexture(GL_TEXTURE_2D, 0);
 
 		// redirect fragment shader output 0 used to the texture that we just bound
 		GLenum drawBuffers[] = { GL_COLOR_ATTACHMENT0 };
@@ -543,6 +598,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 
 		// bind default fb (number 0) so that we render normally next time
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
 		{
 			const char* glsl_vshader = 
 				"#version 450 core                             \n"
@@ -562,15 +618,16 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 				"#version 450 core                             \n"
 				"#line " STR(__LINE__) "                     \n\n" // actual line number in this file for nicer error messages
 				"layout (location=0)                           \n"
-				"out uvec3 o_color;                             \n" // output fragment data location 0
+				"out vec4 o_color;                             \n" // output fragment data location 0
 				"layout (location=0)                           \n"
-				"uniform uint object_id;                        \n" 
-				"layout (location=1)                           \n"
-				"uniform uint draw_id;                        \n" 
+				"uniform vec3 colorID;                        \n" 
+				"//uniform uint objectID;                        \n" 
+				"//layout (location=1)                           \n"
+				"//uniform uint drawID;                        \n" 
 				"                                              \n"
 				"void main()                                   \n"
 				"{                                             \n"
-				"    o_color = uvec3(object_id, draw_id, gl_PrimitiveID); \n"
+				"    o_color = vec4(colorID, 1.0); \n"
 				"}                                             \n";
 
 			rttVShader = glCreateShaderProgramv(GL_VERTEX_SHADER, 1, &glsl_vshader);
@@ -622,12 +679,6 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
         glEnableVertexAttribArray(a_color);
     }
 
-    // checkerboard texture, with 50% transparency on black colors
-	ShaderContext context = {};
-    {
-        loadDefaultTexture(&context);
-    }
-
     // fragment & vertex shaders for drawing triangle
     GLuint trianglePipeline, vshader, fshader;
     {
@@ -664,13 +715,13 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
             "                                              \n"
             "layout (binding=0)                            \n" // (from ARB_shading_language_420pack)
             "uniform sampler2D s_texture;                  \n" // texture unit binding 0
-            "                                              \n"
+
             "layout (location=0)                           \n"
             "out vec4 o_color;                             \n" // output fragment data location 0
             "                                              \n"
             "void main()                                   \n"
             "{                                             \n"
-            "    o_color = texture(s_texture, uv); \n"
+			"	 o_color = texture(s_texture, uv); \n"
             "}                                             \n"
         ;
 
@@ -754,13 +805,15 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
             glViewport(0, 0, width, height);
 
             // clear screen
-            glClearColor(0.0f, 0.0f, 0.0f, 1.f);
+            glClearColor(0.85f, 0.85f, 0.85f, 1.f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
             // setup rotation matrix in uniform
             {
                 angle += delta * 1.0f * (float)M_PI / 20.0f; // full rotation in 20 seconds
                 angle = fmodf(angle, 2.0f * (float)M_PI);
+
+				angle = 0;
 
 				float aspect = (float)height / width;
                 float matrix[] =
@@ -774,28 +827,64 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
                 glProgramUniformMatrix2fv(rttVShader, u_matrix, 1, GL_FALSE, matrix);
             }
 
-            // bind texture to texture unit
-            GLint s_texture = 0; // texture unit that sampler2D will use in GLSL code
-            glBindTextureUnit(s_texture, context.textureBinding);
+			const Position cursorPos = GetCursorWindowPosition(window, width, height);
 
-			POINT cursorPos = {};
-			GetCursorPos(&cursorPos);
-
-			// TODO: map to window coordinates
-			if (cursorPos.x > 800)
+			if (cursorPos.x > (width/2) && cursorPos.y > (height/2))
 			{
-				renderToTexture(width, height, rttPipeline, rttFramebuffer, rttFShader);
+				glBindProgramPipeline(rttPipeline);
+
+				// red
+				const vec3 colorID = encodeID((255 << 16));
+				const GLint colorUniform = 0;
+				//const GLint objectUniform = 0;
+				//const GLint drawUniform = 1;
+
+				//glProgramUniform1ui(rttFShader, objectUniform, 1);
+				//glProgramUniform1ui(rttFShader, drawUniform, 0);
+				glProgramUniform3f(rttFShader, colorUniform, colorID.x, colorID.y, colorID.z);
+				drawToTexture(width, height, rttFramebuffer);
+
+				PixelBufferData pixels = readFromTexture(cursorPos.x, cursorPos.y, width, height, rttFramebuffer);
+
+				//Assert(pixels.R == 255);
+				//Assert(pixels.objectID == 1);
+				//Assert(pixels.primitiveID == 0 || pixels.primitiveID == 1);
+			}
+			else if (cursorPos.x < (width/2) && cursorPos.y < (height/2))
+			{
+				glBindProgramPipeline(rttPipeline);
+
+				// blue
+				const vec3 colorID = encodeID((255 << 0));
+				const GLint colorUniform = 0;
+				//const GLint objectUniform = 0;
+				//const GLint drawUniform = 1;
+
+				//glProgramUniform1ui(rttFShader, objectUniform, 2);
+				//glProgramUniform1ui(rttFShader, drawUniform, 0);
+				glProgramUniform3f(rttFShader, colorUniform, colorID.x, colorID.y, colorID.z);
+
+				drawToTexture(width, height, rttFramebuffer);
+
+				PixelBufferData pixels = readFromTexture(cursorPos.x, cursorPos.y, width, height, rttFramebuffer);
+
+				//Assert(pixels.B == 255);
+				//Assert(pixels.objectID == 2);
+				//Assert(pixels.primitiveID == 0 || pixels.primitiveID == 1);
+			}
+			else
+			{
+				glBindProgramPipeline(trianglePipeline);
+
+				// bind texture to texture unit
+				const GLint s_texture = 0; // texture unit that sampler2D will use in GLSL code
+				glBindTextureUnit(s_texture, context.textureBinding);
 			}
 
-            // activate shaders for next draw call for triangle shaders for default framebuffer
-            glBindProgramPipeline(trianglePipeline);
+			// draw 3 vertices as triangle
+            glDrawArrays(GL_TRIANGLES, 0, 6);
 
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-            // draw 3 vertices as triangle
-            glDrawArrays(GL_TRIANGLES, 0, 3);
-
-            // swap the buffers to show output
+			// swap the buffers to show output
             if (!SwapBuffers(dc))
             {
                 FatalError("Failed to swap OpenGL buffers!");
