@@ -3,15 +3,14 @@
 #include <Windows.h>
 
 #include <GL/gl.h>
+
+// From Martins of HMH community fame
 #include "glcorearb.h"  // download from https://www.khronos.org/registry/OpenGL/api/GL/glcorearb.h
 #include "wglext.h"     // download from https://www.khronos.org/registry/OpenGL/api/GL/wglext.h
 // also download https://www.khronos.org/registry/EGL/api/KHR/khrplatform.h and put in "KHR" folder
 
 typedef BOOL WINAPI SwapInterval(int swapInterval);
-global SwapInterval *wglSwapInterval;
-
-global GLuint vboId;
-global GLuint iboId;
+global SwapInterval* wglSwapInterval = 0;
 
 // make sure you use functions that are valid for selected GL version (specified when context is created)
 #define GL_FUNCTIONS(X) \
@@ -42,11 +41,18 @@ global GLuint iboId;
 GL_FUNCTIONS(X)
 #undef X
 
+// TODO: Store in a global GL state
+global GLuint vboId = 0u;
+global GLuint iboId = 0u;
+
 function void 
-GenerateBufferObjects()
+GenerateBufferObjectIds()
 {
-	glGenBuffers(1, &vboId);    // for vertex buffer
-	glGenBuffers(1, &iboId);    // for index buffer
+	Ensure(true, vboId != 0 && iboId != 0)
+	{
+		glGenBuffers(1, &vboId);
+		glGenBuffers(1, &iboId);
+	}
 }
 
 function void
@@ -141,40 +147,71 @@ DrawTextureToRegion(void* textureMemory, Rectangle2 drawRegion)
 	}
 }
 
+function void 
+APIENTRY DebugCallback(
+    GLenum source, GLenum type, GLuint id, GLenum severity,
+    GLsizei length, const GLchar* message, const void* user)
+{
+    OutputDebugStringA(message);
+    OutputDebugStringA("\n");
+
+    if (severity != GL_DEBUG_SEVERITY_HIGH && severity != GL_DEBUG_SEVERITY_MEDIUM)
+	{
+		return;
+	}
+
+	Assert(severity == GL_DEBUG_SEVERITY_HIGH || severity == GL_DEBUG_SEVERITY_MEDIUM);
+
+	if (IsDebuggerPresent())
+	{
+		Assert(!"OpenGL error - check the callstack in debugger");
+	}
+
+	FatalError("OpenGL API usage error! Use debugger to examine call stack!");
+}
+
 function void
 InitializeOpenGL(App* application)
 {
-	Ensure(true, application->renderer->context.handle)
+	HDC windowDC = SysGetWindowContextHandle(application->window.handle);
+	PIXELFORMATDESCRIPTOR desiredFormat = {};
+	PIXELFORMATDESCRIPTOR suggestedFormat = {};
+	HGLRC renderContextHandle;
+	s32 suggestedFormatIndex;
+
+	desiredFormat.nSize = sizeof(desiredFormat);
+	desiredFormat.nVersion = 1;
+	desiredFormat.dwFlags = PFD_DOUBLEBUFFER | PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL;
+	desiredFormat.cColorBits = 24;
+	desiredFormat.cAlphaBits = 8;
+	desiredFormat.iLayerType = PFD_MAIN_PLANE;
+
+	suggestedFormatIndex = ChoosePixelFormat(windowDC, &desiredFormat);
+	TestBool(DescribePixelFormat(windowDC, suggestedFormatIndex, sizeof(suggestedFormat), &suggestedFormat) 
+		&& SetPixelFormat(windowDC, suggestedFormatIndex, &suggestedFormat));
+
+	renderContextHandle = wglCreateContext(windowDC);
+	application->renderer->context.handle = renderContextHandle;
+
+	TestBool(wglMakeCurrent(windowDC, application->renderer->context.handle));
+
+	ReleaseDC(application->window.handle, windowDC);
+	SysReleaseWindowContextHandle(application->window.handle, windowDC);
 	{
-		HDC windowDC = SysGetWindowContextHandle(application->window.handle);
-		PIXELFORMATDESCRIPTOR desiredFormat = {};
-		PIXELFORMATDESCRIPTOR suggestedFormat = {};
-		HGLRC renderContextHandle;
-		s32 suggestedFormatIndex;
-
-		desiredFormat.nSize = sizeof(desiredFormat);
-		desiredFormat.nVersion = 1;
-		desiredFormat.dwFlags = PFD_DOUBLEBUFFER | PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL;
-		desiredFormat.cColorBits = 24;
-		desiredFormat.cAlphaBits = 8;
-		desiredFormat.iLayerType = PFD_MAIN_PLANE;
-
-		suggestedFormatIndex = ChoosePixelFormat(windowDC, &desiredFormat);
-		TestBool(DescribePixelFormat(windowDC, suggestedFormatIndex, sizeof(suggestedFormat), &suggestedFormat) 
-			&& SetPixelFormat(windowDC, suggestedFormatIndex, &suggestedFormat));
-
-		renderContextHandle = wglCreateContext(windowDC);
-		application->renderer->context.handle = renderContextHandle;
-
-		TestBool(wglMakeCurrent(windowDC, application->renderer->context.handle));
-
-		ReleaseDC(application->window.handle, windowDC);
-		SysReleaseWindowContextHandle(application->window.handle, windowDC);
-		{
-			Ensure(true, wglSwapInterval = (SwapInterval*)wglGetProcAddress("wglSwapIntervalEXT"));
-			wglSwapInterval(1);
-		}
+		Ensure(true, wglSwapInterval = (SwapInterval*)wglGetProcAddress("wglSwapIntervalEXT"));
+		wglSwapInterval(1);
 	}
 
-	GenerateBufferObjects();
+	// Load OpenGL functions
+#define X(type, name) name = (type)wglGetProcAddress(#name); Assert(name);
+	GL_FUNCTIONS(X)
+#undef X
+
+#ifndef NDEBUG
+	// Enable debug callback
+	glDebugMessageCallback(&DebugCallback, NULL);
+	glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+#endif
+
+	GenerateBufferObjectIds();
 }

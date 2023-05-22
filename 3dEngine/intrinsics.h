@@ -114,7 +114,7 @@ const char* StrStr(const char* needle, const char* haystack)
 #undef Abs
 #define Min(a, b) (a) < (b) ? (a) : (b)
 #define Max(a, b) (a) > (b) ? (a) : (b)
-#define Abs(a) (a) >= 0 ? (a) : (-a)
+#define Abs(a) (a) < 0 ? -(a+1) : (a)
 #define DegreesToRadians(degrees) ((f32)M_PI / 180.0f) * degrees
 
 #endif

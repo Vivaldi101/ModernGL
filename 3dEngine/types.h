@@ -248,6 +248,13 @@ Printf(const char* format, ...)
 	OutputDebugString(buffer);
 }
 
+function void 
+FatalError(const char* message)
+{
+    MessageBoxA(NULL, message, "Error", MB_ICONEXCLAMATION);
+    ExitProcess(0);
+}
+
 // TODO: Just for dev, remove these!
 exported void SysFreeFile(ThreadContext *, FileInfo *fi);
 exported FileInfo SysReadFile(ThreadContext *, const char *file_name);

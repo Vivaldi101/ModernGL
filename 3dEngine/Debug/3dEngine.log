@@ -1,0 +1,10 @@
+﻿Build started 02/04/2021 13:24:57.
+     1>Project "C:\Users\Solmyr\Documents\Visual Studio 2010\Projects\3dEngine\3dEngine\3dEngine.vcxproj" on node 2 (ClCompile target(s)).
+     1>ClCompile:
+         C:\Program Files (x86)\Microsoft Visual Studio 10.0\VC\bin\CL.exe /c /ZI /nologo /W3 /WX- /Od /Oy- /D _MBCS /Gm /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /GR- /Fo"Debug\\" /Fd"Debug\vc100.pdb" /Gd /TP /wd4100 /wd4201 /analyze- /errorReport:prompt main.c
+         main.c
+     1>Done Building Project "C:\Users\Solmyr\Documents\Visual Studio 2010\Projects\3dEngine\3dEngine\3dEngine.vcxproj" (ClCompile target(s)).
+
+Build succeeded.
+
+Time Elapsed 00:00:00.43
