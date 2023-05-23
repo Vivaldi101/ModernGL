@@ -351,7 +351,7 @@ void drawToTexture(int width, int height, GLuint frameBuffer)
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	// Draw triangles into it
+	// Draw quad into it
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 
 	// Restore default frame buffer
@@ -614,14 +614,20 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 				"layout (location=0)                           \n"
 				"out uvec3 o_color;                             \n" // output fragment data location 0
 				"layout (location=0)                           \n"
-				"//uniform vec3 colorID;                        \n" 
 				"uniform uint objectID;                        \n" 
 				"layout (location=1)                           \n"
 				"uniform uint drawID;                        \n" 
 				"                                              \n"
 				"void main()                                   \n"
 				"{                                             \n"
-				"    o_color = uvec3(objectID, drawID, gl_PrimitiveID); \n"
+				"	 if (objectID != 0)										\n"
+				"    {											\n"
+				"		o_color = uvec3(objectID, drawID, gl_PrimitiveID); \n"
+				"	 }											\n"
+				"	 else										\n"
+				"	 {											\n"
+				"		o_color = uvec3(0);						\n"
+				"	 }											\n"
 				"}                                             \n";
 
 			rttVShader = glCreateShaderProgramv(GL_VERTEX_SHADER, 1, &glsl_vshader);
@@ -877,72 +883,43 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 			}
 
 			const Position cursorPos = GetCursorWindowPosition(window, width, height);
-			PixelBufferData pixels = {};
 
-			if (cursorPos.x > (width/2))
+			glBindProgramPipeline(rttPipeline);
+
+			const GLint objectUniform = 0;
+			const GLint drawUniform = 1;
+
+			if (cursorPos.x < 0 || cursorPos.x >= width)
 			{
-				glBindProgramPipeline(rttPipeline);
-
-				// red
-				//const vec3 colorID = encodeID((255 << 16));
-				//const GLint colorUniform = 0;
-				const GLint objectUniform = 0;
-				const GLint drawUniform = 1;
-
+				glProgramUniform1ui(rttFShader, objectUniform, 0);
+				glProgramUniform1ui(rttFShader, drawUniform, 0);
+			}
+			else
+			{
 				glProgramUniform1ui(rttFShader, objectUniform, 1);
-				glProgramUniform1ui(rttFShader, drawUniform, 0);
-				//glProgramUniform3f(rttFShader, colorUniform, colorID.x, colorID.y, colorID.z);
-				drawToTexture(width, height, rttFramebuffer);
-
-				pixels = readFromTexture(cursorPos.x, cursorPos.y, width, height, rttFramebuffer);
-
-				//Assert(pixels.R == 255);
-				//Assert(pixels.primitiveID == 0 || pixels.primitiveID == 1);
-				if (pixels.objectID == 1)
-				{
-					//drawPrimitive(pixels.primitiveID);
-				}
+				glProgramUniform1ui(rttFShader, drawUniform, 1);
 			}
-			else if (cursorPos.x < (width/2))
-			{
-				glBindProgramPipeline(rttPipeline);
 
-				// blue
-				//const vec3 colorID = encodeID((255 << 0));
-				//const GLint colorUniform = 0;
-				const GLint objectUniform = 0;
-				const GLint drawUniform = 1;
-
-				glProgramUniform1ui(rttFShader, objectUniform, 2);
-				glProgramUniform1ui(rttFShader, drawUniform, 0);
-				//glProgramUniform3f(rttFShader, colorUniform, colorID.x, colorID.y, colorID.z);
-
-				drawToTexture(width, height, rttFramebuffer);
-
-				pixels = readFromTexture(cursorPos.x, cursorPos.y, width, height, rttFramebuffer);
-
-				//Assert(pixels.B == 255);
-				//Assert(pixels.primitiveID == 0 || pixels.primitiveID == 1);
-				if (pixels.objectID == 2)
-				{
-					//drawPrimitive(pixels.primitiveID);
-				}
-			}
+			drawToTexture(width, height, rttFramebuffer);
+			PixelBufferData pixels = readFromTexture(cursorPos.x, cursorPos.y, width, height, rttFramebuffer);
 
 			//glBindFramebuffer(GL_FRAMEBUFFER, 0);
-			glBindProgramPipeline(trianglePipeline);
-
-			// bind texture to texture unit
-			const GLint s_texture = 0; // texture unit that sampler2D will use in GLSL code
-			glBindTextureUnit(s_texture, context.textureBinding);
-
-			// draw quad
-			glDrawArrays(GL_TRIANGLES, 0, 6);
 
 			if (pixels.objectID != 0)
 			{
+				// draw selected primitive
 				glBindProgramPipeline(pickedPipeline);
 				drawPrimitive(pixels.primitiveID);
+			}
+			else
+			{
+				// draw regular quad
+				glBindProgramPipeline(trianglePipeline);
+
+				// bind texture to texture unit
+				const GLint s_texture = 0; // texture unit that sampler2D will use in GLSL code
+				glBindTextureUnit(s_texture, context.textureBinding);
+				glDrawArrays(GL_TRIANGLES, 0, 6);
 			}
 
 			// swap the buffers to show output
