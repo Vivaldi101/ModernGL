@@ -914,21 +914,19 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 
 			//glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+			// draw regular quad
+			glBindProgramPipeline(trianglePipeline);
+
+			// bind texture to texture unit
+			const GLint s_texture = 0; // texture unit that sampler2D will use in GLSL code
+			glBindTextureUnit(s_texture, context.textureBinding);
+			glDrawArrays(GL_TRIANGLES, 0, 6);
+
 			if (pixels.objectID != 0)
 			{
 				// draw selected primitive
 				glBindProgramPipeline(pickedPipeline);
 				drawPrimitive(pixels.primitiveID);
-			}
-			else
-			{
-				// draw regular quad
-				glBindProgramPipeline(trianglePipeline);
-
-				// bind texture to texture unit
-				const GLint s_texture = 0; // texture unit that sampler2D will use in GLSL code
-				glBindTextureUnit(s_texture, context.textureBinding);
-				glDrawArrays(GL_TRIANGLES, 0, 6);
 			}
 
 			// swap the buffers to show output
