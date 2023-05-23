@@ -371,8 +371,8 @@ PixelBufferData readFromTexture(int x, int y, int width, int height, GLuint fram
 	glFlush();
 	glFinish();
 
-	// TODO: pass coordinates to read
-	// Center pixel
+	glPixelStorei(GL_PACK_ALIGNMENT, 4);
+
 	glReadPixels(x, height - y, 1, 1, GL_RGB_INTEGER, GL_UNSIGNED_INT, &result);
 
 	// Restore default frame buffer
@@ -410,7 +410,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 
     // uncomment in case you want fixed size window
     style &= ~WS_THICKFRAME & ~WS_MAXIMIZEBOX;
-    RECT rect = { 0, 0, 800, 600 };
+    RECT rect = { 0, 0, 1920, 1080 };
     AdjustWindowRectEx(&rect, style, FALSE, exstyle);
     width = rect.right - rect.left;
     height = rect.bottom - rect.top;
@@ -418,9 +418,18 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
     // create window
     HWND window = CreateWindowExW(
         exstyle, wc.lpszClassName, L"OpenGL Window", style,
-        100, 100, 800, 600,
+        0, 0, width, height,
         NULL, NULL, wc.hInstance, NULL);
     Assert(window && "Failed to create window");
+
+	RECT clientRectangle = {};
+	GetClientRect(window, &clientRectangle);
+
+	width = clientRectangle.right - clientRectangle.left;
+	height = clientRectangle.bottom - clientRectangle.top;
+
+	Assert(width > 0 && width <= (rect.right - rect.left));
+	Assert(height > 0 && height <= (rect.bottom - rect.top));
 
     HDC dc = GetDC(window);
     Assert(dc && "Failed to window device context");
