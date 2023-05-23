@@ -345,13 +345,13 @@ int decodeID(int r, int g, int b)
 
 struct PixelBufferData
 {
-	//unsigned int objectID;
-	//unsigned int drawID;
-	//unsigned int primitiveID;
-	unsigned char R;
-	unsigned char G;
-	unsigned char B;
-	unsigned char A;
+	unsigned int objectID;
+	unsigned int drawID;
+	unsigned int primitiveID;
+	//unsigned char R;
+	//unsigned char G;
+	//unsigned char B;
+	//unsigned char A;
 };
 
 void drawToTexture(int width, int height, GLuint frameBuffer) 
@@ -365,9 +365,6 @@ void drawToTexture(int width, int height, GLuint frameBuffer)
 
 	// Draw triangles into it
 	glDrawArrays(GL_TRIANGLES, 0, 6);
-
-	glFlush();
-	glFinish();
 
 	// Restore default frame buffer
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -388,12 +385,17 @@ PixelBufferData readFromTexture(int x, int y, int width, int height, GLuint fram
 
 	// TODO: pass coordinates to read
 	// Center pixel
-	glReadPixels(x, height - y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, &result);
+	glReadPixels(x, height - y, 1, 1, GL_RGB_INTEGER, GL_UNSIGNED_INT, &result);
 
 	// Restore default frame buffer
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	return result;
+}
+
+void drawPrimitive(int primitiveID)
+{
+	glDrawArrays(GL_TRIANGLES, primitiveID * 3, 3);
 }
 
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, int cmdshow)
@@ -540,12 +542,16 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
             //{ { -0.00f, +0.75f }, { 25.0f, 50.0f }, { 1, 0, 0 } },
             //{ { +0.75f, -0.50f }, {  0.0f,  0.0f }, { 0, 1, 0 } },
             //{ { -0.75f, -0.50f }, { 50.0f,  0.0f }, { 0, 0, 1 } },
-            { { -1.00f, -1.0f }, { 25.0f, 50.0f }, { 1, 0, 0 } },
-            { { +1.00f, +1.00f }, {  0.0f,  0.0f }, { 0, 1, 0 } },
-            { { -1.00f, +1.00f }, { 50.0f,  0.0f }, { 0, 0, 1 } },
-            { { -1.00f, -1.0f }, { 25.0f, 50.0f }, { 1, 0, 0 } },
-            { { +1.00f, -1.00f }, {  0.0f,  0.0f }, { 0, 1, 0 } },
-            { { +1.00f, +1.00f }, { 50.0f,  0.0f }, { 0, 0, 1 } },
+
+			// upper-left
+            { { -1.00f, -1.0f },	{ 0.0f*2.0f, 0.0f*2.0f	}, { 1, 0, 0 } },
+            { { +1.00f, +1.00f },	{ 1.0f*2.0f, 1.0f*2.0f	}, { 0, 1, 0 } },
+            { { -1.00f, +1.00f },	{ 0.0f*2.0f, 1.0f*2.0f	}, { 0, 0, 1 } },
+
+			// lower-right
+            { { -1.00f, -1.0f },	{ 0.0f*2.0f, 0.0f*2.0f	}, { 1, 0, 0 } },
+            { { +1.00f, -1.00f },	{ 1.0f*2.0f, 0.0f*2.0f	}, { 0, 1, 0 } },
+            { { +1.00f, +1.00f },	{ 1.0f*2.0f, 1.0f*2.0f	}, { 0, 0, 1 } },
         };
 
         glGenBuffers(1, &vbo);
@@ -575,7 +581,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 		context.rttBinding = rtt;
 
 		// make the texture the same size as the viewport
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32UI, width, height, 0, GL_RGB_INTEGER, GL_UNSIGNED_INT, NULL);
 
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -618,16 +624,16 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 				"#version 450 core                             \n"
 				"#line " STR(__LINE__) "                     \n\n" // actual line number in this file for nicer error messages
 				"layout (location=0)                           \n"
-				"out vec4 o_color;                             \n" // output fragment data location 0
+				"out uvec3 o_color;                             \n" // output fragment data location 0
 				"layout (location=0)                           \n"
-				"uniform vec3 colorID;                        \n" 
-				"//uniform uint objectID;                        \n" 
-				"//layout (location=1)                           \n"
-				"//uniform uint drawID;                        \n" 
+				"//uniform vec3 colorID;                        \n" 
+				"uniform uint objectID;                        \n" 
+				"layout (location=1)                           \n"
+				"uniform uint drawID;                        \n" 
 				"                                              \n"
 				"void main()                                   \n"
 				"{                                             \n"
-				"    o_color = vec4(colorID, 1.0); \n"
+				"    o_color = uvec3(objectID, drawID, gl_PrimitiveID); \n"
 				"}                                             \n";
 
 			rttVShader = glCreateShaderProgramv(GL_VERTEX_SHADER, 1, &glsl_vshader);
@@ -752,6 +758,60 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
         glUseProgramStages(trianglePipeline, GL_FRAGMENT_SHADER_BIT, fshader);
     }
 
+    // fragment & vertex shaders for drawing picked triangle
+    GLuint pickedPipeline, pickedVS, pickedFS;
+	{        
+			const char* glsl_vshader = 
+				"#version 450 core                             \n"
+				"#line " STR(__LINE__) "                     \n\n" // actual line number in this file for nicer error messages
+				"                                              \n"
+				"layout (location=0) in vec2 a_pos;            \n" // position attribute index 0
+				"layout (location=0)                           \n" // (from ARB_explicit_uniform_location)
+				"uniform mat2 u_matrix;                        \n" // matrix uniform location 0
+				"out gl_PerVertex { vec4 gl_Position; };       \n" // required because of ARB_separate_shader_objects
+				"void main()                                   \n"
+				"{                                             \n"
+				"    vec2 pos = u_matrix * a_pos;              \n"
+				"    gl_Position = vec4(pos, 0, 1);            \n"
+				"}                                             \n";
+
+			const char* glsl_fshader =
+				"#version 450 core                             \n"
+				"#line " STR(__LINE__) "                     \n\n" // actual line number in this file for nicer error messages
+				"layout (location=0)                           \n"
+				"out vec4 o_color;                             \n" // output fragment data location 0
+				"void main()                                   \n"
+				"{                                             \n"
+				"    o_color = vec4(1.0f, 0.0f, 0.0f, 1.0f); \n"
+				"}                                             \n";
+
+		pickedVS = glCreateShaderProgramv(GL_VERTEX_SHADER, 1, &glsl_vshader);
+		pickedFS = glCreateShaderProgramv(GL_FRAGMENT_SHADER, 1, &glsl_fshader);
+
+		GLint linked;
+		glGetProgramiv(pickedVS, GL_LINK_STATUS, &linked);
+		if (!linked)
+		{
+			char message[1024];
+			glGetProgramInfoLog(pickedVS, sizeof(message), NULL, message);
+			OutputDebugStringA(message);
+			Assert(!"Failed to create vertex shader!");
+		}
+
+		glGetProgramiv(pickedFS, GL_LINK_STATUS, &linked);
+		if (!linked)
+		{
+			char message[1024];
+			glGetProgramInfoLog(pickedFS, sizeof(message), NULL, message);
+			OutputDebugStringA(message);
+			Assert(!"Failed to create fragment shader!");
+		}
+
+		glGenProgramPipelines(1, &pickedPipeline);
+		glUseProgramStages(pickedPipeline, GL_VERTEX_SHADER_BIT, pickedVS);
+		glUseProgramStages(pickedPipeline, GL_FRAGMENT_SHADER_BIT, pickedFS);
+	}
+
     // setup global GL state
     {
         // enable alpha blending
@@ -825,64 +885,81 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
                 GLint u_matrix = 0;
                 glProgramUniformMatrix2fv(vshader, u_matrix, 1, GL_FALSE, matrix);
                 glProgramUniformMatrix2fv(rttVShader, u_matrix, 1, GL_FALSE, matrix);
+                glProgramUniformMatrix2fv(pickedVS, u_matrix, 1, GL_FALSE, matrix);
             }
 
 			const Position cursorPos = GetCursorWindowPosition(window, width, height);
+			PixelBufferData pixels = {};
 
 			if (cursorPos.x > (width/2) && cursorPos.y > (height/2))
 			{
 				glBindProgramPipeline(rttPipeline);
 
 				// red
-				const vec3 colorID = encodeID((255 << 16));
-				const GLint colorUniform = 0;
-				//const GLint objectUniform = 0;
-				//const GLint drawUniform = 1;
+				//const vec3 colorID = encodeID((255 << 16));
+				//const GLint colorUniform = 0;
+				const GLint objectUniform = 0;
+				const GLint drawUniform = 1;
 
-				//glProgramUniform1ui(rttFShader, objectUniform, 1);
-				//glProgramUniform1ui(rttFShader, drawUniform, 0);
-				glProgramUniform3f(rttFShader, colorUniform, colorID.x, colorID.y, colorID.z);
+				glProgramUniform1ui(rttFShader, objectUniform, 1);
+				glProgramUniform1ui(rttFShader, drawUniform, 0);
+				//glProgramUniform3f(rttFShader, colorUniform, colorID.x, colorID.y, colorID.z);
 				drawToTexture(width, height, rttFramebuffer);
 
-				PixelBufferData pixels = readFromTexture(cursorPos.x, cursorPos.y, width, height, rttFramebuffer);
+				pixels = readFromTexture(cursorPos.x, cursorPos.y, width, height, rttFramebuffer);
 
 				//Assert(pixels.R == 255);
-				//Assert(pixels.objectID == 1);
 				//Assert(pixels.primitiveID == 0 || pixels.primitiveID == 1);
+				if (pixels.objectID == 1)
+				{
+					//drawPrimitive(pixels.primitiveID);
+				}
 			}
 			else if (cursorPos.x < (width/2) && cursorPos.y < (height/2))
 			{
 				glBindProgramPipeline(rttPipeline);
 
 				// blue
-				const vec3 colorID = encodeID((255 << 0));
-				const GLint colorUniform = 0;
-				//const GLint objectUniform = 0;
-				//const GLint drawUniform = 1;
+				//const vec3 colorID = encodeID((255 << 0));
+				//const GLint colorUniform = 0;
+				const GLint objectUniform = 0;
+				const GLint drawUniform = 1;
 
-				//glProgramUniform1ui(rttFShader, objectUniform, 2);
-				//glProgramUniform1ui(rttFShader, drawUniform, 0);
-				glProgramUniform3f(rttFShader, colorUniform, colorID.x, colorID.y, colorID.z);
+				glProgramUniform1ui(rttFShader, objectUniform, 2);
+				glProgramUniform1ui(rttFShader, drawUniform, 0);
+				//glProgramUniform3f(rttFShader, colorUniform, colorID.x, colorID.y, colorID.z);
 
 				drawToTexture(width, height, rttFramebuffer);
 
-				PixelBufferData pixels = readFromTexture(cursorPos.x, cursorPos.y, width, height, rttFramebuffer);
+				pixels = readFromTexture(cursorPos.x, cursorPos.y, width, height, rttFramebuffer);
 
 				//Assert(pixels.B == 255);
-				//Assert(pixels.objectID == 2);
 				//Assert(pixels.primitiveID == 0 || pixels.primitiveID == 1);
+				if (pixels.objectID == 2)
+				{
+					//drawPrimitive(pixels.primitiveID);
+				}
 			}
 			else
 			{
-				glBindProgramPipeline(trianglePipeline);
+				//glBindProgramPipeline(trianglePipeline);
 
 				// bind texture to texture unit
 				const GLint s_texture = 0; // texture unit that sampler2D will use in GLSL code
 				glBindTextureUnit(s_texture, context.textureBinding);
 			}
 
-			// draw 3 vertices as triangle
+			//glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+			// draw quad
             glDrawArrays(GL_TRIANGLES, 0, 6);
+
+			if (pixels.objectID != 0)
+			{
+				Assert(pickedPipeline > 0);
+				glBindProgramPipeline(pickedPipeline);
+				drawPrimitive(pixels.primitiveID);
+			}
 
 			// swap the buffers to show output
             if (!SwapBuffers(dc))
