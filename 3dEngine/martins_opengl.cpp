@@ -782,7 +782,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 				"out vec4 o_color;                             \n" // output fragment data location 0
 				"void main()                                   \n"
 				"{                                             \n"
-				"    o_color = vec4(1.0f, 0.0f, 0.0f, 1.0f); \n"
+				"    o_color = vec4(1.0f, 0.0f, 1.0f, 1.0f); \n"
 				"}                                             \n";
 
 		pickedVS = glCreateShaderProgramv(GL_VERTEX_SHADER, 1, &glsl_vshader);
@@ -891,7 +891,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 			const Position cursorPos = GetCursorWindowPosition(window, width, height);
 			PixelBufferData pixels = {};
 
-			if (cursorPos.x > (width/2) && cursorPos.y > (height/2))
+			if (cursorPos.x > (width/2))
 			{
 				glBindProgramPipeline(rttPipeline);
 
@@ -915,7 +915,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 					//drawPrimitive(pixels.primitiveID);
 				}
 			}
-			else if (cursorPos.x < (width/2) && cursorPos.y < (height/2))
+			else if (cursorPos.x < (width/2))
 			{
 				glBindProgramPipeline(rttPipeline);
 
