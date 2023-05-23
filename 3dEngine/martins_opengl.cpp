@@ -148,18 +148,6 @@ Position GetCursorWindowPosition(HWND window, int windowWidth, int windowHeight)
 	result.x = cursorPoint.x;
 	result.y = cursorPoint.y;
 
-	result.x = (result.x < 0) ? 0 : result.x;
-	result.y = (result.y < 0) ? 0 : result.y;
-
-	result.x = (result.x >= windowWidth) ? windowWidth - 1: result.x;
-	result.y = (result.y >= windowHeight) ? windowHeight - 1: result.y;
-
-	Assert(result.x >= 0);
-	Assert(result.y >= 0);
-
-	Assert(result.x < windowWidth);
-	Assert(result.y < windowHeight);
-
 	return result;
 }
 
@@ -544,14 +532,14 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
             //{ { -0.75f, -0.50f }, { 50.0f,  0.0f }, { 0, 0, 1 } },
 
 			// upper-left
-            { { -1.00f, -1.0f },	{ 0.0f*2.0f, 0.0f*2.0f	}, { 1, 0, 0 } },
-            { { +1.00f, +1.00f },	{ 1.0f*2.0f, 1.0f*2.0f	}, { 0, 1, 0 } },
-            { { -1.00f, +1.00f },	{ 0.0f*2.0f, 1.0f*2.0f	}, { 0, 0, 1 } },
+            { { -1.00f, -1.0f },	{ 0.0f*8.0f, 0.0f*8.0f	}, { 1, 0, 0 } },
+            { { +1.00f, +1.00f },	{ 1.0f*8.0f, 1.0f*8.0f	}, { 0, 1, 0 } },
+            { { -1.00f, +1.00f },	{ 0.0f*8.0f, 1.0f*8.0f	}, { 0, 0, 1 } },
 
 			// lower-right
-            { { -1.00f, -1.0f },	{ 0.0f*2.0f, 0.0f*2.0f	}, { 1, 0, 0 } },
-            { { +1.00f, -1.00f },	{ 1.0f*2.0f, 0.0f*2.0f	}, { 0, 1, 0 } },
-            { { +1.00f, +1.00f },	{ 1.0f*2.0f, 1.0f*2.0f	}, { 0, 0, 1 } },
+            { { -1.00f, -1.0f },	{ 0.0f*8.0f, 0.0f*8.0f	}, { 1, 0, 0 } },
+            { { +1.00f, -1.00f },	{ 1.0f*8.0f, 0.0f*8.0f	}, { 0, 1, 0 } },
+            { { +1.00f, +1.00f },	{ 1.0f*8.0f, 1.0f*8.0f	}, { 0, 0, 1 } },
         };
 
         glGenBuffers(1, &vbo);
