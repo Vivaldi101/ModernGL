@@ -298,8 +298,8 @@ void loadDefaultTexture(ShaderContext* context)
 {
 	const unsigned int pixels[] =
 	{
-		0xff00ff00, 0xffffffff,
-		0xffffffff, 0xff00ff00,
+		0xff00ff00, 0xff000000,
+		0xff000000, 0xff00ff00,
 	};
 	context->width = context->height = 2;
 	context->bpp = 4;
