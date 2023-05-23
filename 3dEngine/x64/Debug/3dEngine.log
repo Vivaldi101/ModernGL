@@ -1,4 +1,4 @@
-﻿Build started 23/05/2023 13:33:00.
+﻿Build started 23/05/2023 13:40:53.
      1>Project "C:\Users\Solmyr\Documents\Visual Studio 2010\Projects\3dEngine\3dEngine\3dEngine.vcxproj" on node 2 (build target(s)).
      1>InitializeBuildStatus:
          Creating "x64\Debug\3dEngine.unsuccessfulbuild" because "AlwaysCreate" was specified.
@@ -18,4 +18,4 @@
 
 Build succeeded.
 
-Time Elapsed 00:00:00.62
+Time Elapsed 00:00:00.59

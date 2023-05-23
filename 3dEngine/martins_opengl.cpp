@@ -310,8 +310,8 @@ void loadDefaultTexture(ShaderContext* context)
 {
 	const unsigned int pixels[] =
 	{
-		0xffff00ff, 0xffffffff,
-		0xffffffff, 0xffff00ff,
+		0xff00ff00, 0xffffffff,
+		0xffffffff, 0xff00ff00,
 	};
 	context->width = context->height = 2;
 	context->bpp = 4;
@@ -782,7 +782,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 				"out vec4 o_color;                             \n" // output fragment data location 0
 				"void main()                                   \n"
 				"{                                             \n"
-				"    o_color = vec4(1.0f, 0.0f, 1.0f, 1.0f); \n"
+				"    o_color = vec4(0.0f, 1.0f, 0.0f, 1.0f); \n"
 				"}                                             \n";
 
 		pickedVS = glCreateShaderProgramv(GL_VERTEX_SHADER, 1, &glsl_vshader);
@@ -861,32 +861,32 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
         // render only if window size is non-zero
         if (width != 0 && height != 0)
         {
-            // setup output size covering all client area of window
-            glViewport(0, 0, width, height);
+			// setup output size covering all client area of window
+			glViewport(0, 0, width, height);
 
-            // clear screen
-            glClearColor(0.85f, 0.85f, 0.85f, 1.f);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+			// clear screen
+			glClearColor(0.85f, 0.85f, 0.85f, 1.f);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-            // setup rotation matrix in uniform
-            {
-                angle += delta * 1.0f * (float)M_PI / 20.0f; // full rotation in 20 seconds
-                angle = fmodf(angle, 2.0f * (float)M_PI);
+			// setup rotation matrix in uniform
+			{
+				angle += delta * 1.0f * (float)M_PI / 20.0f; // full rotation in 20 seconds
+				angle = fmodf(angle, 2.0f * (float)M_PI);
 
 				angle = 0;
 
 				float aspect = (float)height / width;
-                float matrix[] =
-                {
-                    cosf(angle) * aspect, -sinf(angle),
-                    sinf(angle) * aspect,  cosf(angle),
-                };
+				float matrix[] =
+				{
+					cosf(angle) * aspect, -sinf(angle),
+					sinf(angle) * aspect,  cosf(angle),
+				};
 
-                GLint u_matrix = 0;
-                glProgramUniformMatrix2fv(vshader, u_matrix, 1, GL_FALSE, matrix);
-                glProgramUniformMatrix2fv(rttVShader, u_matrix, 1, GL_FALSE, matrix);
-                glProgramUniformMatrix2fv(pickedVS, u_matrix, 1, GL_FALSE, matrix);
-            }
+				GLint u_matrix = 0;
+				glProgramUniformMatrix2fv(vshader, u_matrix, 1, GL_FALSE, matrix);
+				glProgramUniformMatrix2fv(rttVShader, u_matrix, 1, GL_FALSE, matrix);
+				glProgramUniformMatrix2fv(pickedVS, u_matrix, 1, GL_FALSE, matrix);
+			}
 
 			const Position cursorPos = GetCursorWindowPosition(window, width, height);
 			PixelBufferData pixels = {};
@@ -940,32 +940,28 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 					//drawPrimitive(pixels.primitiveID);
 				}
 			}
-			else
-			{
-				//glBindProgramPipeline(trianglePipeline);
-
-				// bind texture to texture unit
-				const GLint s_texture = 0; // texture unit that sampler2D will use in GLSL code
-				glBindTextureUnit(s_texture, context.textureBinding);
-			}
 
 			//glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			glBindProgramPipeline(trianglePipeline);
+
+			// bind texture to texture unit
+			const GLint s_texture = 0; // texture unit that sampler2D will use in GLSL code
+			glBindTextureUnit(s_texture, context.textureBinding);
 
 			// draw quad
-            glDrawArrays(GL_TRIANGLES, 0, 6);
+			glDrawArrays(GL_TRIANGLES, 0, 6);
 
 			if (pixels.objectID != 0)
 			{
-				Assert(pickedPipeline > 0);
 				glBindProgramPipeline(pickedPipeline);
 				drawPrimitive(pixels.primitiveID);
 			}
 
 			// swap the buffers to show output
-            if (!SwapBuffers(dc))
-            {
-                FatalError("Failed to swap OpenGL buffers!");
-            }
+			if (!SwapBuffers(dc))
+			{
+				FatalError("Failed to swap OpenGL buffers!");
+			}
         }
         else
         {
