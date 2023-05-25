@@ -308,38 +308,11 @@ void loadDefaultTexture(ShaderContext* context)
 	loadTexture(context);
 }
 
-struct vec3
-{
-	GLfloat x, y, z;
-};
-
-// encode an unique ID into a colour with components in range of 0.0 to 1.0
-vec3 encodeID(int id) 
-{
-	int r = id / 65536;
-	int g = (id - r * 65536) / 256;
-	int b = (id - r * 65536 - g * 256);
-
-	vec3 result = {(float)r / 255.0f, (float)g / 255.0f, (float)b / 255.0f};
-
-	// convert to floats. only divide by 255, because range is 0-255
-	return result;
-}
-
-int decodeID(int r, int g, int b) 
-{
-	return b + g * 256 + r * 256 * 256;
-}
-
 struct PixelBufferData
 {
 	unsigned int objectID;
 	unsigned int drawID;
 	unsigned int primitiveID;
-	//unsigned char R;
-	//unsigned char G;
-	//unsigned char B;
-	//unsigned char A;
 };
 
 void drawToTexture(int width, int height, GLuint frameBuffer) 
@@ -629,14 +602,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 				"                                              \n"
 				"void main()                                   \n"
 				"{                                             \n"
-				"	 if (objectID != 0)										\n"
-				"    {											\n"
-				"		o_color = uvec3(objectID, drawID, gl_PrimitiveID); \n"
-				"	 }											\n"
-				"	 else										\n"
-				"	 {											\n"
-				"		o_color = uvec3(0);						\n"
-				"	 }											\n"
+				"	 o_color = uvec3(objectID, drawID, gl_PrimitiveID); \n"
 				"}                                             \n";
 
 			rttVShader = glCreateShaderProgramv(GL_VERTEX_SHADER, 1, &glsl_vshader);
@@ -873,11 +839,6 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 
 			// setup rotation matrix in uniform
 			{
-				angle += delta * 1.0f * (float)M_PI / 20.0f; // full rotation in 20 seconds
-				angle = fmodf(angle, 2.0f * (float)M_PI);
-
-				angle = 0;
-
 				float aspect = (float)height / width;
 				float matrix[] =
 				{
@@ -897,17 +858,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 
 			const GLint objectUniform = 0;
 			const GLint drawUniform = 1;
-
-			if (cursorPos.x < 0 || cursorPos.x >= width)
-			{
-				glProgramUniform1ui(rttFShader, objectUniform, 0);
-				glProgramUniform1ui(rttFShader, drawUniform, 0);
-			}
-			else
-			{
-				glProgramUniform1ui(rttFShader, objectUniform, 1);
-				glProgramUniform1ui(rttFShader, drawUniform, 1);
-			}
+			glProgramUniform1ui(rttFShader, objectUniform, 1);
+			glProgramUniform1ui(rttFShader, drawUniform, 1);
 
 			drawToTexture(width, height, rttFramebuffer);
 			PixelBufferData pixels = readFromTexture(cursorPos.x, cursorPos.y, width, height, rttFramebuffer);
@@ -922,11 +874,20 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE previnstance, LPSTR cmdline, in
 			glBindTextureUnit(s_texture, context.textureBinding);
 			glDrawArrays(GL_TRIANGLES, 0, 6);
 
+			// object ID 0 is background
 			if (pixels.objectID != 0)
 			{
+				angle += delta * 1.0f * (float)M_PI / 40.0f; // full rotation in 40 seconds
+				angle = fmodf(angle, 2.0f * (float)M_PI);
+
 				// draw selected primitive
 				glBindProgramPipeline(pickedPipeline);
 				drawPrimitive(pixels.primitiveID);
+			}
+			else
+			{
+				angle += delta * 1.0f * (float)M_PI / 10.0f; // full rotation in 10 seconds
+				angle = fmodf(angle, 2.0f * (float)M_PI);
 			}
 
 			// swap the buffers to show output
